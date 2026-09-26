@@ -61,6 +61,11 @@ jspm_packages/
 .env.test.local
 .env.production.local
 
+# Firebase Service Account Secrets
+*firebase-adminsdk*.json
+serviceAccountKey*.json
+
+
 # Stores VSCode versions used for testing
 .vscode-test
 

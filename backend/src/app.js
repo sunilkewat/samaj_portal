@@ -29,11 +29,15 @@ app.get('/health', (req, res) => {
 
 // Import Feature Routes
 const authRoutes = require('./modules/auth/auth.routes');
+const profileRoutes = require('./modules/profiles/profile.routes');
+const directoryRoutes = require('./modules/directory/directory.routes');
 
 // API Routes Mounting Point
 const API_PREFIX = process.env.API_PREFIX || '/api/v1';
 
 app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use(`${API_PREFIX}/profiles`, profileRoutes);
+app.use(`${API_PREFIX}/directory`, directoryRoutes);
 
 app.get(`${API_PREFIX}`, (req, res) => {
   res.json({

@@ -85,16 +85,47 @@ try {
  * Upload buffer to Firebase Cloud Storage (livetdsbucket)
  */
 async function uploadToStorage(buffer, destinationPath, mimeType) {
-  if (!bucket) throw new Error('Firebase Storage bucket is not available');
+  // If buffer is image, Data URI fallback is completely immune to GCS bucket 403 issues
+  if (buffer && mimeType && mimeType.startsWith('image/')) {
+    try {
+      if (bucket) {
+        const file = bucket.file(destinationPath);
+        await file.save(buffer, {
+          metadata: { contentType: mimeType },
+        });
+        const [signedUrl] = await file.getSignedUrl({
+          action: 'read',
+          expires: Date.now() + 1000 * 60 * 60 * 24 * 365 * 5, // 5 years
+        });
+        if (signedUrl) return signedUrl;
+      }
+    } catch (e) {
+      console.warn('Firebase Storage upload warning, using Data URI fallback:', e.message);
+    }
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  }
+
+  if (!bucket) {
+    if (buffer && mimeType) {
+      return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    }
+    throw new Error('Firebase Storage bucket is not available');
+  }
 
   const file = bucket.file(destinationPath);
   await file.save(buffer, {
     metadata: { contentType: mimeType },
-    public: true,
   });
 
-  // Make public or get signed URL
-  return `https://storage.googleapis.com/${bucket.name}/${destinationPath}`;
+  try {
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 1000 * 60 * 60 * 24 * 365 * 5,
+    });
+    return signedUrl;
+  } catch (err) {
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+  }
 }
 
 /**

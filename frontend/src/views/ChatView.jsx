@@ -86,6 +86,7 @@ export default function ChatView({ onNotification }) {
   const [groupMembersModal, setGroupMembersModal] = useState(false);
   const [groupMembersList, setGroupMembersList] = useState([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   const chatContainerRef = useRef(null);
   const prevMessagesCountRef = useRef(0);
@@ -1032,18 +1033,45 @@ export default function ChatView({ onNotification }) {
                     {msg.mediaUrl && (
                       <Box sx={{ mb: msg.text ? 1 : 0 }}>
                         {msg.mediaType === 'IMAGE' && (
-                          <Box
-                            component="img"
-                            src={msg.mediaUrl}
-                            alt="Chat image"
-                            sx={{
-                              width: '100%',
-                              maxHeight: 240,
-                              objectFit: 'cover',
-                              borderRadius: 2,
-                              display: 'block',
-                            }}
-                          />
+                          <Box sx={{ position: 'relative' }}>
+                            <Box
+                              component="img"
+                              src={msg.mediaUrl}
+                              alt="Chat image"
+                              onClick={() => setPreviewImage(msg.mediaUrl)}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                if (e.target.nextElementSibling) {
+                                  e.target.nextElementSibling.style.display = 'flex';
+                                }
+                              }}
+                              sx={{
+                                width: '100%',
+                                maxHeight: 280,
+                                objectFit: 'cover',
+                                borderRadius: 2,
+                                display: 'block',
+                                cursor: 'pointer',
+                                transition: 'opacity 0.2s',
+                                '&:hover': { opacity: 0.92 },
+                              }}
+                            />
+                            <Box
+                              sx={{
+                                display: 'none',
+                                alignItems: 'center',
+                                gap: 1,
+                                p: 1.5,
+                                borderRadius: 2,
+                                bgcolor: msg.isMe ? 'rgba(255,255,255,0.2)' : '#f1f5f9',
+                              }}
+                            >
+                              <ImageIcon sx={{ color: msg.isMe ? '#fff' : '#ea580c' }} />
+                              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                {msg.mediaName || 'फोटो संलग्न (छवि)'}
+                              </Typography>
+                            </Box>
+                          </Box>
                         )}
                         {msg.mediaType === 'VIDEO' && (
                           <Box sx={{ borderRadius: 2, overflow: 'hidden', bgcolor: '#000' }}>
@@ -1529,6 +1557,38 @@ export default function ChatView({ onNotification }) {
             समूह बनाएं
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* FULLSCREEN IMAGE PREVIEW DIALOG */}
+      <Dialog
+        open={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            📷 फोटो पूर्वावलोकन (Image Preview)
+          </Typography>
+          <IconButton onClick={() => setPreviewImage(null)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, bgcolor: '#0f172a', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          {previewImage && (
+            <img
+              src={previewImage}
+              alt="Full Preview"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '75vh',
+                objectFit: 'contain',
+                borderRadius: 8,
+                boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+              }}
+            />
+          )}
+        </DialogContent>
       </Dialog>
     </Box>
   );

@@ -305,13 +305,20 @@ class GroupsService {
       else if (file.mimetype.startsWith('audio/')) mediaType = 'AUDIO';
       else mediaType = 'DOCUMENT';
 
-      const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const destination = `samaj_chat/${groupId}/${Date.now()}_${safeName}`;
-      try {
-        mediaUrl = await uploadToStorage(file.buffer, destination, file.mimetype);
-      } catch (e) {
-        console.warn('Firebase upload error, fallback to URL:', e.message);
-        mediaUrl = `https://storage.googleapis.com/livetdsbucket/${destination}`;
+      // For image attachments, Data URI provides immediate, reliable 100% rendering without 403 errors
+      if (file.buffer && file.mimetype.startsWith('image/')) {
+        mediaUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+      } else {
+        const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const destination = `samaj_chat/${groupId}/${Date.now()}_${safeName}`;
+        try {
+          mediaUrl = await uploadToStorage(file.buffer, destination, file.mimetype);
+        } catch (e) {
+          console.warn('Media upload error, fallback to buffer data:', e.message);
+          if (file.buffer) {
+            mediaUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+          }
+        }
       }
     }
 

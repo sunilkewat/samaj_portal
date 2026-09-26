@@ -72,17 +72,24 @@ export default function ChatView({ onNotification }) {
   const [memberSearch, setMemberSearch] = useState('');
   const [addedMembersState, setAddedMembersState] = useState({});
 
-  const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const prevMessagesCountRef = useRef(0);
   const socketRef = useRef(null);
 
-  // Auto-scroll chat to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Scroll ONLY the chat box internally, NEVER scroll the browser window
+  const scrollToBottom = (force = false) => {
+    if (!chatContainerRef.current) return;
+    const container = chatContainerRef.current;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+    if (force || isNearBottom) {
+      container.scrollTop = container.scrollHeight;
+    }
   };
 
+  // Scroll chat on group change
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, activeGroupId]);
+    scrollToBottom(true);
+  }, [activeGroupId]);
 
   const loadMessagesForGroup = async (groupId) => {
     if (!groupId) return;
@@ -260,6 +267,8 @@ export default function ChatView({ onNotification }) {
       [targetGroupId]: [...(prev[targetGroupId] || []), newMsgObj],
     }));
 
+    setTimeout(() => scrollToBottom(true), 50);
+
     const fileToUpload = selectedChatMedia;
     setMessageInput('');
     setSelectedChatMedia(null);
@@ -381,6 +390,15 @@ export default function ChatView({ onNotification }) {
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
   const activeMessages = (activeGroup && messages[activeGroup.id]) || [];
+
+  // Scroll chat box down ONLY if new messages arrive AND user is already viewing the bottom
+  useEffect(() => {
+    const currentCount = activeMessages.length;
+    if (currentCount > prevMessagesCountRef.current) {
+      scrollToBottom(false);
+    }
+    prevMessagesCountRef.current = currentCount;
+  }, [activeMessages.length]);
 
   const filteredGroups = (groups || []).filter((g) =>
     (g?.name || '').toLowerCase().includes((groupSearch || '').toLowerCase())
@@ -569,7 +587,10 @@ export default function ChatView({ onNotification }) {
           )}
 
           {/* Messages Scroll Area */}
-          <Box sx={{ flex: 1, p: 2.5, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Box
+            ref={chatContainerRef}
+            sx={{ flex: 1, p: 2.5, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1.5 }}
+          >
             {activeMessages.length === 0 ? (
               <Box sx={{ textAlign: 'center', my: 'auto', color: '#94a3b8' }}>
                 <ChatIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
@@ -684,7 +705,6 @@ export default function ChatView({ onNotification }) {
                 </Box>
               ))
             )}
-            <div ref={messagesEndRef} />
           </Box>
 
           {/* Bottom Chat Input Form with Media Attachment */}

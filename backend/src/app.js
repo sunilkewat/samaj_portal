@@ -27,6 +27,10 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Interactive Swagger API Documentation
+const { swaggerUi, swaggerDocument } = require('./config/swagger');
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 // Import Feature Routes
 const authRoutes = require('./modules/auth/auth.routes');
 const profileRoutes = require('./modules/profiles/profile.routes');

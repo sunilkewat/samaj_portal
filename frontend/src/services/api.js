@@ -102,3 +102,8 @@ export const updateMemberRole = async (groupId, userId, role) => {
   const res = await apiClient.patch(`/groups/${groupId}/members/${userId}/role`, { role });
   return res.data;
 };
+
+export const removeGroupMember = async (groupId, userId) => {
+  const res = await apiClient.delete(`/groups/${groupId}/members/${userId}`);
+  return res.data;
+};

@@ -225,6 +225,55 @@ class GroupsService {
   }
 
   /**
+   * Remove a member from group (Only Group Admins/Owner can remove members!)
+   */
+  async removeMember(requesterId, groupId, targetUserId) {
+    if (!isUUID(groupId)) throw new ApiError(400, 'Invalid group ID format');
+    if (!isUUID(requesterId)) throw new ApiError(401, 'Invalid requester authorization');
+
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) throw new ApiError(404, 'Group not found');
+
+    // PERMISSION CHECK: Only OWNER or ADMIN can remove members!
+    const requesterMembership = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: requesterId } },
+    });
+    const isGroupAdmin =
+      (requesterMembership && ['OWNER', 'ADMIN'].includes(requesterMembership.role)) ||
+      group.createdById === requesterId;
+    if (!isGroupAdmin) {
+      throw new ApiError(403, 'केवल ग्रुप एडमिन ही सदस्य को समूह से हटा सकते हैं (Only Group Admins can remove members)');
+    }
+
+    // Check target membership if valid UUID
+    if (isUUID(targetUserId)) {
+      const targetMembership = await prisma.groupMember.findUnique({
+        where: { groupId_userId: { groupId, userId: targetUserId } },
+      });
+
+      if (!targetMembership) {
+        throw new ApiError(404, 'यह सदस्य समूह में नहीं है (Member not found in group)');
+      }
+
+      // Group creator / OWNER cannot be removed
+      if (targetMembership.role === 'OWNER' || group.createdById === targetUserId) {
+        throw new ApiError(400, 'समूह के मुख्य संस्थापक (Owner) को हटाया नहीं जा सकता');
+      }
+
+      // If requester is ADMIN (not OWNER), they cannot remove another ADMIN or OWNER
+      if (requesterMembership?.role === 'ADMIN' && targetMembership.role === 'ADMIN' && group.createdById !== requesterId) {
+        throw new ApiError(403, 'एक एडमिन दूसरे एडमिन को नहीं हटा सकता, केवल मुख्य संस्थापक ऐसा कर सकते हैं');
+      }
+
+      await prisma.groupMember.delete({
+        where: { groupId_userId: { groupId, userId: targetUserId } },
+      });
+    }
+
+    return { success: true, groupId, removedUserId: targetUserId };
+  }
+
+  /**
    * Post message in group chat
    */
   async sendMessage(userId, groupId, { messageText }, file) {

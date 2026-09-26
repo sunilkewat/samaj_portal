@@ -114,6 +114,26 @@ class GroupsController {
       next(error);
     }
   }
+
+  async removeMember(req, res, next) {
+    try {
+      const { id, userId } = req.params;
+      const result = await groupsService.removeMember(req.user.id, id, userId);
+
+      // Broadcast member removed event to group
+      const chatNamespace = req.app.get('chatNamespace');
+      if (chatNamespace) {
+        chatNamespace.to(`group_${id}`).emit('member_removed', {
+          groupId: id,
+          userId,
+        });
+      }
+
+      return res.status(200).json(new ApiResponse(200, result, 'Member removed from group successfully'));
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new GroupsController();

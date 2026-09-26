@@ -42,6 +42,7 @@ import {
   People as PeopleIcon,
   Star as OwnerIcon,
   Shield as ShieldIcon,
+  PersonRemove as RemoveMemberIcon,
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +52,7 @@ import {
   sendGroupMessage,
   createGroup,
   addGroupMember,
+  removeGroupMember,
   fetchGroupMembers,
   updateMemberRole,
 } from '../services/api';
@@ -238,6 +240,16 @@ export default function ChatView({ onNotification }) {
       socket.on('member_added', (payload) => {
         if (payload && payload.groupId) {
           loadMessagesForGroup(payload.groupId);
+          loadGroupMembers(payload.groupId);
+          refreshGroups();
+        }
+      });
+
+      socket.on('member_removed', (payload) => {
+        if (payload && payload.groupId) {
+          loadMessagesForGroup(payload.groupId);
+          loadGroupMembers(payload.groupId);
+          refreshGroups();
         }
       });
 
@@ -426,6 +438,66 @@ export default function ChatView({ onNotification }) {
       if (onNotification) {
         onNotification('भूमिका बदलने में समस्या: ' + (e.response?.data?.message || e.message));
       }
+    }
+  };
+
+  // Remove member from group (Admins only)
+  const handleRemoveMember = async (targetUserId, targetMemberName) => {
+    const confirmRemove = window.confirm(
+      `क्या आप वाकई '${targetMemberName || 'इस सदस्य'}' को इस समूह से हटाना चाहते हैं?`
+    );
+    if (!confirmRemove) return;
+
+    const activeGroup = (groups || []).find((g) => g.id === activeGroupId) || groups[0];
+    const targetGroupId = activeGroup ? activeGroup.id : activeGroupId;
+
+    // Optimistically update members list
+    setGroupMembersList((prev) => prev.filter((m) => m.userId !== targetUserId));
+    setAddedMembersState((prev) => {
+      const copy = { ...prev };
+      delete copy[targetUserId];
+      return copy;
+    });
+
+    // Update group members count
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === targetGroupId ? { ...g, membersCount: Math.max(1, (g.membersCount || 1) - 1) } : g
+      )
+    );
+
+    // Add local system message
+    const systemMsg = {
+      id: `local-sys-${Date.now()}`,
+      groupId: targetGroupId,
+      senderId: 'system',
+      senderName: 'सिस्टम सूचना',
+      senderGotra: 'समाज',
+      text: `🚫 ${currentUser?.name || 'ग्रुप एडमिन'} ने ${targetMemberName || 'सदस्य'} को समूह से हटा दिया।`,
+      time: new Date().toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit' }),
+      isSystem: true,
+    };
+    setMessages((prev) => ({
+      ...prev,
+      [targetGroupId]: [...(prev[targetGroupId] || []), systemMsg],
+    }));
+
+    try {
+      await removeGroupMember(targetGroupId, targetUserId);
+      if (onNotification) {
+        onNotification(`'${targetMemberName || 'सदस्य'}' को समूह से हटा दिया गया! 🚫`);
+      }
+      sendGroupMessage(targetGroupId, { messageText: systemMsg.text })
+        .then(() => loadMessagesForGroup(targetGroupId))
+        .catch(() => {});
+      loadGroupMembers(targetGroupId);
+      refreshGroups();
+    } catch (e) {
+      console.warn('Remove member API error:', e.message);
+      if (onNotification) {
+        onNotification('सदस्य हटाने में त्रुटि: ' + (e.response?.data?.message || e.message));
+      }
+      loadGroupMembers(targetGroupId);
     }
   };
 
@@ -1297,7 +1369,7 @@ export default function ChatView({ onNotification }) {
         </DialogTitle>
         <DialogContent dividers>
           <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
-            <strong>मल्टीपल एडमिन सुविधा:</strong> इस समूह में एक से अधिक एडमिन (Multiple Admins) हो सकते हैं। सभी एडमिन नए सदस्यों को जोड़ने और ग्रुप प्रबंधन का पूर्ण अधिकार रखते हैं।
+            <strong>एडमिन विशेषाधिकार:</strong> इस समूह के सभी एडमिन नए सदस्यों को जोड़ने (<strong>+ Add Member</strong>), उनकी भूमिका बदलने (Admin / Member) तथा अवांछित सदस्यों को समूह से हटाने (<strong>Remove Member</strong>) का पूर्ण अधिकार रखते हैं।
           </Alert>
 
           {isLoadingMembers ? (
@@ -1369,9 +1441,9 @@ export default function ChatView({ onNotification }) {
                       </Box>
                     </Box>
 
-                    {/* Role Promotion/Demotion button - accessible to current admins */}
+                    {/* Admin Actions: Role change + Remove member from group */}
                     {isCurrentUserAdmin && !isOwner && m.userId !== currentUser?.id && (
-                      <Box>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         {isAdmin ? (
                           <Button
                             size="small"
@@ -1394,6 +1466,23 @@ export default function ChatView({ onNotification }) {
                             🛡️ एडमिन बनाएं
                           </Button>
                         )}
+
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          startIcon={<RemoveMemberIcon sx={{ fontSize: '15px !important' }} />}
+                          onClick={() => handleRemoveMember(m.userId, m.name)}
+                          sx={{
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            borderColor: '#fca5a5',
+                            color: '#dc2626',
+                            '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' },
+                          }}
+                        >
+                          ग्रुप से हटाएं
+                        </Button>
                       </Box>
                     )}
                   </ListItem>

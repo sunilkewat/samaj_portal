@@ -43,6 +43,7 @@ import {
   Star as OwnerIcon,
   Shield as ShieldIcon,
   PersonRemove as RemoveMemberIcon,
+  YouTube as YouTubeIcon,
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -56,6 +57,8 @@ import {
   fetchGroupMembers,
   updateMemberRole,
 } from '../services/api';
+import YouTubeEmbed from '../components/feed/YouTubeEmbed';
+import { extractYouTubeUrlFromText, getYouTubeEmbedUrl } from '../utils/youtube.util';
 import { INITIAL_GROUPS, INITIAL_MESSAGES, INITIAL_MEMBERS } from '../data/mockData';
 
 export default function ChatView({ onNotification }) {
@@ -1109,6 +1112,17 @@ export default function ChatView({ onNotification }) {
                       </Typography>
                     )}
 
+                    {/* YouTube Video Player (Embedded directly in chat) */}
+                    {(() => {
+                      const ytUrl = extractYouTubeUrlFromText(msg.text) || (msg.mediaUrl && getYouTubeEmbedUrl(msg.mediaUrl) ? msg.mediaUrl : null);
+                      if (!ytUrl) return null;
+                      return (
+                        <Box sx={{ mt: 1.5, width: '100%', minWidth: { xs: 240, sm: 300 }, maxWidth: 440 }}>
+                          <YouTubeEmbed youtubeUrl={ytUrl} title="YouTube वीडियो" />
+                        </Box>
+                      );
+                    })()}
+
                     <Typography
                       variant="caption"
                       sx={{
@@ -1160,6 +1174,20 @@ export default function ChatView({ onNotification }) {
               </Box>
             )}
 
+            {/* YouTube Link Live Detection Indicator */}
+            {extractYouTubeUrlFromText(messageInput) && (
+              <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip
+                  icon={<YouTubeIcon sx={{ color: '#ef4444 !important' }} />}
+                  label="✓ YouTube वीडियो डिटेक्ट हुआ (चैट में सीधे प्लेयर खुलेगा)"
+                  color="error"
+                  variant="outlined"
+                  size="small"
+                  sx={{ fontWeight: 600, bgcolor: '#fef2f2' }}
+                />
+              </Box>
+            )}
+
             {isLoggedIn ? (
               <Box component="form" onSubmit={handleSendMessage} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                 {/* Media Attachment Action Buttons */}
@@ -1170,6 +1198,22 @@ export default function ChatView({ onNotification }) {
                     sx={{ color: '#ea580c' }}
                   >
                     <ImageIcon />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="YouTube वीडियो लिंक जोड़ें">
+                  <IconButton
+                    onClick={() => {
+                      const url = window.prompt(
+                        'YouTube वीडियो लिंक दर्ज करें:\n(उदा. https://www.youtube.com/watch?v=... या https://youtu.be/...)'
+                      );
+                      if (url && url.trim()) {
+                        setMessageInput((prev) => (prev ? `${prev} ${url.trim()}` : url.trim()));
+                      }
+                    }}
+                    sx={{ color: '#ef4444' }}
+                  >
+                    <YouTubeIcon />
                   </IconButton>
                 </Tooltip>
 
@@ -1185,7 +1229,7 @@ export default function ChatView({ onNotification }) {
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="अपना संदेश लिखें (Type your message)..."
+                  placeholder="अपना संदेश लिखें या YouTube लिंक पेस्ट करें..."
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   sx={{ bgcolor: '#f8fafc', borderRadius: 2 }}

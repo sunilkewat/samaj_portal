@@ -12,3 +12,17 @@ export const getYouTubeEmbedUrl = (url) => {
     return null;
   }
 };
+
+/**
+ * Extract first YouTube link found inside arbitrary text content
+ */
+export const extractYouTubeUrlFromText = (text) => {
+  if (!text || typeof text !== 'string') return null;
+  try {
+    const regExp = /(https?:\/\/(?:www\.)?(?:youtube\.com\/(?:[^\/\s]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)[^\s"\']+)/i;
+    const match = text.match(regExp);
+    return match ? match[0] : null;
+  } catch (e) {
+    return null;
+  }
+};

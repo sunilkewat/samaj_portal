@@ -370,15 +370,15 @@ export default function ChatView({ onNotification }) {
   const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
   const activeMessages = (activeGroup && messages[activeGroup.id]) || [];
 
-  const filteredGroups = groups.filter((g) =>
-    g.name.toLowerCase().includes(groupSearch.toLowerCase())
+  const filteredGroups = (groups || []).filter((g) =>
+    (g?.name || '').toLowerCase().includes((groupSearch || '').toLowerCase())
   );
 
-  const filteredDirectoryMembers = INITIAL_MEMBERS.filter(
+  const filteredDirectoryMembers = (INITIAL_MEMBERS || []).filter(
     (m) =>
-      m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      m.gotra.includes(memberSearch) ||
-      m.city.toLowerCase().includes(memberSearch.toLowerCase())
+      (m?.name || '').toLowerCase().includes((memberSearch || '').toLowerCase()) ||
+      (m?.gotra || '').includes(memberSearch || '') ||
+      (m?.city || '').toLowerCase().includes((memberSearch || '').toLowerCase())
   );
 
   return (

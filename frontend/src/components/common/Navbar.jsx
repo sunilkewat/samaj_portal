@@ -55,10 +55,10 @@ export default function Navbar({ apiStatus }) {
                 <Chip
                   avatar={
                     <Avatar sx={{ bgcolor: '#ea580c', color: '#fff', fontWeight: 700 }}>
-                      {currentUser.name ? currentUser.name[0] : 'U'}
+                      {currentUser?.name ? currentUser.name[0] : 'U'}
                     </Avatar>
                   }
-                  label={currentUser.name}
+                  label={currentUser?.name || 'सदस्य'}
                   variant="outlined"
                   sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)', fontWeight: 600 }}
                 />

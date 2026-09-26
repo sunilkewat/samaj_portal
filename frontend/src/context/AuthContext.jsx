@@ -7,8 +7,16 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const stored = localStorage.getItem('samaj_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
+      if (!stored || stored === 'undefined' || stored === 'null') return null;
+      const parsed = JSON.parse(stored);
+      if (!parsed || typeof parsed !== 'object') return null;
+      return parsed;
+    } catch (e) {
+      console.warn('Invalid user in localStorage, clearing:', e);
+      try {
+        localStorage.removeItem('samaj_user');
+        localStorage.removeItem('samaj_token');
+      } catch (_) {}
       return null;
     }
   });

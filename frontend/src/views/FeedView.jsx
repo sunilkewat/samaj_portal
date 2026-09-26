@@ -73,7 +73,7 @@ export default function FeedView({
         <Card sx={{ p: 2, mb: 3, borderRadius: 3, border: '1px solid #e2e8f0', bgcolor: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Avatar sx={{ bgcolor: '#ea580c', fontWeight: 700 }}>
-              {currentUser.name ? currentUser.name[0] : 'U'}
+              {currentUser?.name ? currentUser.name[0] : 'U'}
             </Avatar>
             <Box
               onClick={handleOpenCreatePost}
@@ -88,7 +88,7 @@ export default function FeedView({
                 transition: 'all 0.2s',
               }}
             >
-              {currentUser.name}, समाज के साथ कोई विचार, फोटो, वीडियो या YouTube लिंक साझा करें...
+              {currentUser?.name || 'सदस्य'}, समाज के साथ कोई विचार, फोटो, वीडियो या YouTube लिंक साझा करें...
             </Box>
             <Button
               variant="text"

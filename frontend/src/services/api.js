@@ -77,6 +77,14 @@ export const fetchGroupMessages = async (groupId, page = 1) => {
 };
 
 export const sendGroupMessage = async (groupId, payload) => {
-  const res = await apiClient.post(`/groups/${groupId}/messages`, payload);
+  const isFormData = payload instanceof FormData;
+  const res = await apiClient.post(`/groups/${groupId}/messages`, payload, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  });
+  return res.data;
+};
+
+export const addGroupMember = async (groupId, userId, role = 'MEMBER') => {
+  const res = await apiClient.post(`/groups/${groupId}/members`, { userId, role });
   return res.data;
 };

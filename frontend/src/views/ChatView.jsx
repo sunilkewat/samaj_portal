@@ -21,6 +21,7 @@ import {
   ListItemButton,
   ListItemAvatar,
   ListItemText,
+  Tooltip,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -29,11 +30,24 @@ import {
   Add as AddIcon,
   Group as GroupIcon,
   Lock as LockIcon,
+  AttachFile as AttachFileIcon,
+  Image as ImageIcon,
+  Videocam as VideoIcon,
+  PictureAsPdf as PdfIcon,
+  PersonAdd as AddMemberIcon,
+  Close as CloseIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
-import { fetchGroups, fetchGroupMessages, sendGroupMessage, createGroup } from '../services/api';
-import { INITIAL_GROUPS, INITIAL_MESSAGES } from '../data/mockData';
+import {
+  fetchGroups,
+  fetchGroupMessages,
+  sendGroupMessage,
+  createGroup,
+  addGroupMember,
+} from '../services/api';
+import { INITIAL_GROUPS, INITIAL_MESSAGES, INITIAL_MEMBERS } from '../data/mockData';
 
 export default function ChatView({ onNotification }) {
   const { currentUser, isLoggedIn, openAuth } = useAuth();
@@ -43,9 +57,20 @@ export default function ChatView({ onNotification }) {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [messageInput, setMessageInput] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
+
+  // Media file attachment state in chat
+  const [selectedChatMedia, setSelectedChatMedia] = useState(null);
+  const mediaFileInputRef = useRef(null);
+
+  // Group creation dialog state
   const [createGroupModal, setCreateGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
+
+  // Add Member dialog state
+  const [addMemberModal, setAddMemberModal] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [addedMembersState, setAddedMembersState] = useState({});
 
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
@@ -104,7 +129,6 @@ export default function ChatView({ onNotification }) {
         if (payload && payload.groupId) {
           setMessages((prev) => {
             const groupMsgs = prev[payload.groupId] || [];
-            // Avoid duplicate message if already added optimistically
             if (groupMsgs.some((m) => m.id === payload.id)) {
               return prev;
             }
@@ -118,7 +142,12 @@ export default function ChatView({ onNotification }) {
                   senderName: payload.senderName || 'स्वजातीय सदस्य',
                   senderGotra: payload.senderGotra || 'कश्यप',
                   text: payload.messageText || payload.text,
-                  time: payload.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                  mediaUrl: payload.mediaUrl || null,
+                  mediaType: payload.mediaType || null,
+                  mediaName: payload.mediaName || null,
+                  time:
+                    payload.time ||
+                    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
                   isMe: currentUser && payload.senderId === currentUser.id,
                 },
               ],
@@ -145,7 +174,6 @@ export default function ChatView({ onNotification }) {
     }
     setActiveGroupId(groupId);
 
-    // Fetch messages from API if available
     fetchGroupMessages(groupId)
       .then((res) => {
         if (res && res.data && res.data.length > 0) {
@@ -157,21 +185,40 @@ export default function ChatView({ onNotification }) {
               : 'सदस्य',
             senderGotra: m.sender?.profile?.samajGotra || 'कश्यप',
             text: m.messageText,
-            time: new Date(m.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            mediaUrl: m.mediaUrl,
+            mediaType: m.mediaType,
+            time: new Date(m.createdAt).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
             isMe: currentUser && m.senderId === currentUser.id,
           }));
           setMessages((prev) => ({ ...prev, [groupId]: apiMsgs }));
         }
       })
       .catch((e) => {
-        // Fallback to local messages
+        // Fallback to local
       });
   };
 
-  // Handle Send Message
+  // Handle File Attachment Selection
+  const handleMediaSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedChatMedia(e.target.files[0]);
+    }
+  };
+
+  const handleRemoveMedia = () => {
+    setSelectedChatMedia(null);
+    if (mediaFileInputRef.current) {
+      mediaFileInputRef.current.value = '';
+    }
+  };
+
+  // Handle Send Message (With optional media file attachment)
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if (!messageInput.trim()) return;
+    if (!messageInput.trim() && !selectedChatMedia) return;
 
     if (!isLoggedIn) {
       openAuth('login');
@@ -180,6 +227,18 @@ export default function ChatView({ onNotification }) {
     }
 
     const textToSend = messageInput.trim();
+    let mediaUrl = null;
+    let mediaType = null;
+    let mediaName = null;
+
+    if (selectedChatMedia) {
+      mediaUrl = URL.createObjectURL(selectedChatMedia);
+      mediaName = selectedChatMedia.name;
+      if (selectedChatMedia.type.startsWith('video/')) mediaType = 'VIDEO';
+      else if (selectedChatMedia.type === 'application/pdf') mediaType = 'DOCUMENT';
+      else mediaType = 'IMAGE';
+    }
+
     const newMsgObj = {
       id: `local-msg-${Date.now()}`,
       groupId: activeGroupId,
@@ -187,6 +246,9 @@ export default function ChatView({ onNotification }) {
       senderName: currentUser.name || 'सुनील केवट',
       senderGotra: currentUser.gotra || 'कश्यप',
       text: textToSend,
+      mediaUrl,
+      mediaType,
+      mediaName,
       time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       isMe: true,
     };
@@ -196,22 +258,70 @@ export default function ChatView({ onNotification }) {
       ...prev,
       [activeGroupId]: [...(prev[activeGroupId] || []), newMsgObj],
     }));
+
+    const fileToUpload = selectedChatMedia;
     setMessageInput('');
+    setSelectedChatMedia(null);
+    if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
 
     // Emit via WebSocket
     if (socketRef.current && socketRef.current.connected) {
       socketRef.current.emit('send_message', newMsgObj);
     }
 
-    // Persist via REST API
+    // Persist via REST API (Multipart form if media attached)
     try {
-      await sendGroupMessage(activeGroupId, { messageText: textToSend });
+      if (fileToUpload) {
+        const formData = new FormData();
+        if (textToSend) formData.append('messageText', textToSend);
+        formData.append('media', fileToUpload);
+        await sendGroupMessage(activeGroupId, formData);
+      } else {
+        await sendGroupMessage(activeGroupId, { messageText: textToSend });
+      }
     } catch (err) {
-      // Ignored gracefully
+      console.warn('Message send API error:', err.message);
     }
   };
 
-  // Handle Create New Group
+  // Handle Add Member to Current Active Group
+  const handleAddMember = async (member) => {
+    setAddedMembersState((prev) => ({ ...prev, [member.id]: true }));
+
+    // Increment member count in state
+    setGroups((prev) =>
+      prev.map((g) => (g.id === activeGroupId ? { ...g, membersCount: g.membersCount + 1 } : g))
+    );
+
+    // Add a system welcome message into the chat
+    const systemMsg = {
+      id: `system-${Date.now()}`,
+      groupId: activeGroupId,
+      senderId: 'system',
+      senderName: 'सिस्टम सूचना',
+      senderGotra: 'समाज',
+      text: `👋 ${currentUser?.name || 'सदस्य'} ने ${member.name} को इस समूह में जोड़ा। हार्दिक स्वागत! 💐`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      isMe: false,
+    };
+
+    setMessages((prev) => ({
+      ...prev,
+      [activeGroupId]: [...(prev[activeGroupId] || []), systemMsg],
+    }));
+
+    if (onNotification) {
+      onNotification(`${member.name} को '${activeGroup.name}' में सफलतापूर्वक जोड़ा गया! 🎉`);
+    }
+
+    try {
+      await addGroupMember(activeGroupId, member.id);
+    } catch (e) {
+      // Ignored
+    }
+  };
+
+  // Handle Create New Group Submit
   const handleCreateGroupSubmit = async () => {
     if (!newGroupName.trim()) return;
 
@@ -250,6 +360,13 @@ export default function ChatView({ onNotification }) {
     g.name.toLowerCase().includes(groupSearch.toLowerCase())
   );
 
+  const filteredDirectoryMembers = INITIAL_MEMBERS.filter(
+    (m) =>
+      m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+      m.gotra.includes(memberSearch) ||
+      m.city.toLowerCase().includes(memberSearch.toLowerCase())
+  );
+
   return (
     <Box>
       {/* Title Header */}
@@ -259,7 +376,7 @@ export default function ChatView({ onNotification }) {
             💬 समाज चौपाल व ग्रुप चर्चा (Community Chat)
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b' }}>
-            स्वजातीय बंधुओं के साथ लाइव चर्चा, विचार-विमर्श और संवाद का सीधा मंच
+            स्वजातीय बंधुओं के साथ लाइव चर्चा, विचार-विमर्श, फोटो/वीडियो व मीडिया साझा करने का सीधा मंच
           </Typography>
         </Box>
 
@@ -290,7 +407,7 @@ export default function ChatView({ onNotification }) {
           overflow: 'hidden',
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
-          height: { xs: 'auto', md: '640px' },
+          height: { xs: 'auto', md: '660px' },
         }}
       >
         {/* LEFT COLUMN: Groups List */}
@@ -339,7 +456,13 @@ export default function ChatView({ onNotification }) {
                     }}
                   >
                     <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: isSelected ? '#ea580c' : '#f1f5f9', color: isSelected ? '#fff' : '#0f172a', fontWeight: 800 }}>
+                      <Avatar
+                        sx={{
+                          bgcolor: isSelected ? '#ea580c' : '#f1f5f9',
+                          color: isSelected ? '#fff' : '#0f172a',
+                          fontWeight: 800,
+                        }}
+                      >
                         {grp.icon || '💬'}
                       </Avatar>
                     </ListItemAvatar>
@@ -363,7 +486,7 @@ export default function ChatView({ onNotification }) {
         </Box>
 
         {/* RIGHT COLUMN: Active Chat Room Window */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc', height: { xs: '500px', md: '100%' } }}>
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc', height: { xs: '540px', md: '100%' } }}>
           {/* Chat Room Header */}
           {activeGroup && (
             <Box
@@ -385,16 +508,37 @@ export default function ChatView({ onNotification }) {
                     {activeGroup.name}
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#64748b' }}>
-                    {activeGroup.description}
+                    👥 {activeGroup.membersCount} सदस्य • {activeGroup.description}
                   </Typography>
                 </Box>
               </Box>
 
-              <Chip
-                label="🟢 लाइव सक्रिय"
-                size="small"
-                sx={{ bgcolor: 'rgba(34, 197, 94, 0.12)', color: '#16a34a', fontWeight: 700 }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip
+                  label="🟢 लाइव सक्रिय"
+                  size="small"
+                  sx={{ bgcolor: 'rgba(34, 197, 94, 0.12)', color: '#16a34a', fontWeight: 700 }}
+                />
+
+                {/* ADD MEMBER BUTTON IN CHAT HEADER */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="primary"
+                  startIcon={<AddMemberIcon />}
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      openAuth('login');
+                      if (onNotification) onNotification('सदस्य जोड़ने के लिए कृपया पहले लॉगिन करें! 🔐');
+                      return;
+                    }
+                    setAddMemberModal(true);
+                  }}
+                  sx={{ fontWeight: 700, borderColor: '#ea580c', color: '#ea580c' }}
+                >
+                  + सदस्य जोड़ें (Add Member)
+                </Button>
+              </Box>
             </Box>
           )}
 
@@ -403,7 +547,7 @@ export default function ChatView({ onNotification }) {
             {activeMessages.length === 0 ? (
               <Box sx={{ textAlign: 'center', my: 'auto', color: '#94a3b8' }}>
                 <ChatIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
-                <Typography variant="body2">इस समूह में अभी कोई संदेश नहीं है। पहला संदेश भेजें!</Typography>
+                <Typography variant="body2">इस समूह में अभी कोई संदेश नहीं है। पहला संदेश या फोटो भेजें!</Typography>
               </Box>
             ) : (
               activeMessages.map((msg) => (
@@ -413,7 +557,7 @@ export default function ChatView({ onNotification }) {
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: msg.isMe ? 'flex-end' : 'flex-start',
-                    maxWidth: '80%',
+                    maxWidth: { xs: '88%', sm: '75%' },
                     alignSelf: msg.isMe ? 'flex-end' : 'flex-start',
                   }}
                 >
@@ -445,9 +589,59 @@ export default function ChatView({ onNotification }) {
                       boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                     }}
                   >
-                    <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-                      {msg.text}
-                    </Typography>
+                    {/* Media in Chat Message */}
+                    {msg.mediaUrl && (
+                      <Box sx={{ mb: msg.text ? 1 : 0 }}>
+                        {msg.mediaType === 'IMAGE' && (
+                          <Box
+                            component="img"
+                            src={msg.mediaUrl}
+                            alt="Chat image"
+                            sx={{
+                              width: '100%',
+                              maxHeight: 240,
+                              objectFit: 'cover',
+                              borderRadius: 2,
+                              display: 'block',
+                            }}
+                          />
+                        )}
+                        {msg.mediaType === 'VIDEO' && (
+                          <Box sx={{ borderRadius: 2, overflow: 'hidden', bgcolor: '#000' }}>
+                            <video
+                              controls
+                              src={msg.mediaUrl}
+                              style={{ width: '100%', maxHeight: 240, display: 'block' }}
+                            />
+                          </Box>
+                        )}
+                        {msg.mediaType === 'DOCUMENT' && (
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              p: 1,
+                              borderRadius: 1.5,
+                              bgcolor: msg.isMe ? 'rgba(255,255,255,0.2)' : '#f1f5f9',
+                            }}
+                          >
+                            <PdfIcon sx={{ color: msg.isMe ? '#fff' : '#ef4444' }} />
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                              {msg.mediaName || 'दस्तावेज (PDF)'}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Text Message */}
+                    {msg.text && (
+                      <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                        {msg.text}
+                      </Typography>
+                    )}
+
                     <Typography
                       variant="caption"
                       sx={{
@@ -455,7 +649,7 @@ export default function ChatView({ onNotification }) {
                         textAlign: 'right',
                         mt: 0.5,
                         fontSize: '0.68rem',
-                        color: msg.isMe ? 'rgba(255,255,255,0.8)' : '#94a3b8',
+                        color: msg.isMe ? 'rgba(255,255,255,0.85)' : '#94a3b8',
                       }}
                     >
                       {msg.time}
@@ -467,10 +661,61 @@ export default function ChatView({ onNotification }) {
             <div ref={messagesEndRef} />
           </Box>
 
-          {/* Bottom Chat Input Form or Login Prompt */}
+          {/* Bottom Chat Input Form with Media Attachment */}
           <Box sx={{ p: 2, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+            {/* Hidden File Input for Media Upload in Chat */}
+            <input
+              type="file"
+              ref={mediaFileInputRef}
+              style={{ display: 'none' }}
+              accept="image/*,video/*,application/pdf"
+              onChange={handleMediaSelect}
+            />
+
+            {/* Attached Media Preview Chip */}
+            {selectedChatMedia && (
+              <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Chip
+                  icon={
+                    selectedChatMedia.type.startsWith('video/') ? (
+                      <VideoIcon />
+                    ) : selectedChatMedia.type === 'application/pdf' ? (
+                      <PdfIcon />
+                    ) : (
+                      <ImageIcon />
+                    )
+                  }
+                  label={`${selectedChatMedia.name} (${(selectedChatMedia.size / 1024).toFixed(0)} KB)`}
+                  onDelete={handleRemoveMedia}
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                />
+              </Box>
+            )}
+
             {isLoggedIn ? (
-              <Box component="form" onSubmit={handleSendMessage} sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+              <Box component="form" onSubmit={handleSendMessage} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                {/* Media Attachment Action Buttons */}
+                <Tooltip title="फोटो या वीडियो संलग्न करें">
+                  <IconButton
+                    color="primary"
+                    onClick={() => mediaFileInputRef.current?.click()}
+                    sx={{ color: '#ea580c' }}
+                  >
+                    <ImageIcon />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="दस्तावेज या PDF जोड़ें">
+                  <IconButton
+                    onClick={() => mediaFileInputRef.current?.click()}
+                    sx={{ color: '#64748b' }}
+                  >
+                    <AttachFileIcon />
+                  </IconButton>
+                </Tooltip>
+
                 <TextField
                   fullWidth
                   size="small"
@@ -479,6 +724,7 @@ export default function ChatView({ onNotification }) {
                   onChange={(e) => setMessageInput(e.target.value)}
                   sx={{ bgcolor: '#f8fafc', borderRadius: 2 }}
                 />
+
                 <Button
                   type="submit"
                   variant="contained"
@@ -512,7 +758,7 @@ export default function ChatView({ onNotification }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <LockIcon sx={{ color: '#ea580c' }} />
                   <Typography variant="body2" sx={{ color: '#9a3412', fontWeight: 600 }}>
-                    चर्चा में संदेश भेजने व भाग लेने के लिए कृपया पहले लॉगिन करें।
+                    चर्चा में संदेश या मीडिया भेजने के लिए कृपया पहले लॉगिन करें।
                   </Typography>
                 </Box>
                 <Button
@@ -528,6 +774,92 @@ export default function ChatView({ onNotification }) {
           </Box>
         </Box>
       </Card>
+
+      {/* ============================================================== */}
+      {/* ADD MEMBER TO GROUP DIALOG MODAL                               */}
+      {/* ============================================================== */}
+      <Dialog open={addMemberModal} onClose={() => setAddMemberModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>👥 समूह में नया सदस्य जोड़ें: {activeGroup?.name}</span>
+          <IconButton onClick={() => setAddMemberModal(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="नाम, गोत्र या शहर से सदस्य खोजें..."
+            value={memberSearch}
+            onChange={(e) => setMemberSearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+
+          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block', mb: 1 }}>
+            समाज डायरेक्टरी से सदस्य चुनें:
+          </Typography>
+
+          <List sx={{ maxHeight: 340, overflowY: 'auto', p: 0 }}>
+            {filteredDirectoryMembers.map((mem) => {
+              const isAlreadyAdded = Boolean(addedMembersState[mem.id]);
+              return (
+                <ListItem
+                  key={mem.id}
+                  secondaryAction={
+                    <Button
+                      size="small"
+                      variant={isAlreadyAdded ? 'outlined' : 'contained'}
+                      color={isAlreadyAdded ? 'success' : 'primary'}
+                      startIcon={isAlreadyAdded ? <CheckIcon /> : <AddIcon />}
+                      onClick={() => handleAddMember(mem)}
+                      disabled={isAlreadyAdded}
+                      sx={{
+                        bgcolor: isAlreadyAdded ? 'transparent' : '#ea580c',
+                        '&:hover': { bgcolor: isAlreadyAdded ? 'transparent' : '#c2410c' },
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isAlreadyAdded ? 'जुड़ गए' : '+ जोड़ें'}
+                    </Button>
+                  }
+                  sx={{ borderBottom: '1px solid #f1f5f9', py: 1 }}
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#1e293b', fontWeight: 700 }}>{mem.name[0]}</Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          {mem.name}
+                        </Typography>
+                        <Chip
+                          label={`गोत्र: ${mem.gotra}`}
+                          size="small"
+                          sx={{ fontSize: '0.68rem', height: 18, bgcolor: '#ffedd5', color: '#c2410c' }}
+                        />
+                      </Box>
+                    }
+                    secondary={`${mem.city}, ${mem.state} • ${mem.occupation}`}
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setAddMemberModal(false)} variant="contained">
+            पूर्ण (Done)
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* CREATE NEW DISCUSSION GROUP DIALOG */}
       <Dialog open={createGroupModal} onClose={() => setCreateGroupModal(false)} maxWidth="xs" fullWidth>

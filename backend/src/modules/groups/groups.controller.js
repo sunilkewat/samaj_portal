@@ -31,6 +31,17 @@ class GroupsController {
     }
   }
 
+  async addMember(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { userId, role } = req.body;
+      const membership = await groupsService.addMember(req.user.id, id, userId, role);
+      return res.status(201).json(new ApiResponse(201, membership, 'Member added to group successfully'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async sendMessage(req, res, next) {
     try {
       const { id } = req.params;

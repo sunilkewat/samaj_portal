@@ -78,17 +78,57 @@ class GroupsService {
   }
 
   /**
+   * Add a member to group
+   */
+  async addMember(requesterId, groupId, targetUserId, role = 'MEMBER') {
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) throw new ApiError(404, 'Group not found');
+
+    const membership = await prisma.groupMember.upsert({
+      where: {
+        groupId_userId: { groupId, userId: targetUserId },
+      },
+      update: { role },
+      create: {
+        groupId,
+        userId: targetUserId,
+        role,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            profile: {
+              select: { firstName: true, lastName: true, profilePhoto: true, samajGotra: true },
+            },
+          },
+        },
+      },
+    });
+
+    return membership;
+  }
+
+  /**
    * Post message in group chat
    */
   async sendMessage(userId, groupId, { messageText }, file) {
-    const isMember = await prisma.groupMember.findUnique({
+    let isMember = await prisma.groupMember.findUnique({
       where: {
         groupId_userId: { groupId, userId },
       },
     });
 
     if (!isMember) {
-      throw new ApiError(403, 'Must be a group member to send messages');
+      // Auto-join public group so members can chat seamlessly
+      const group = await prisma.group.findUnique({ where: { id: groupId } });
+      if (group && group.groupType === 'PUBLIC') {
+        isMember = await prisma.groupMember.create({
+          data: { groupId, userId, role: 'MEMBER' },
+        });
+      } else {
+        throw new ApiError(403, 'Must be a group member to send messages');
+      }
     }
 
     let mediaUrl = null;
@@ -96,13 +136,16 @@ class GroupsService {
 
     if (file) {
       if (file.mimetype.startsWith('image/')) mediaType = 'IMAGE';
+      else if (file.mimetype.startsWith('video/')) mediaType = 'VIDEO';
       else if (file.mimetype.startsWith('audio/')) mediaType = 'AUDIO';
       else mediaType = 'DOCUMENT';
 
-      const destination = `samaj_chat/${groupId}/${Date.now()}_${file.originalname}`;
+      const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const destination = `samaj_chat/${groupId}/${Date.now()}_${safeName}`;
       try {
         mediaUrl = await uploadToStorage(file.buffer, destination, file.mimetype);
       } catch (e) {
+        console.warn('Firebase upload error, fallback to URL:', e.message);
         mediaUrl = `https://storage.googleapis.com/livetdsbucket/${destination}`;
       }
     }

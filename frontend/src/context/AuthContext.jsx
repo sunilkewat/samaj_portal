@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (mobileNumber, password, fallbackUser = null) => {
+  const login = async (mobileNumber, password) => {
     setIsAuthLoading(true);
     try {
       const res = await loginUser(mobileNumber, password);
@@ -52,20 +52,36 @@ export const AuthProvider = ({ children }) => {
         return { success: true, user: userObj };
       }
     } catch (err) {
-      // Demo / offline fallback
-      const userObj = fallbackUser || {
-        id: 'af0e2307-527b-4ff2-827b-3767f68fb979',
-        mobileNumber: mobileNumber || '9876543210',
-        name: 'सुनील केवट (Sunil Kewat)',
-        gotra: 'कश्यप',
-        city: 'Indore',
-      };
-      localStorage.setItem('samaj_token', 'demo-token');
-      localStorage.setItem('samaj_user', JSON.stringify(userObj));
-      setAuthToken('demo-token');
-      setCurrentUser(userObj);
-      closeAuth();
-      return { success: true, user: userObj, isDemo: true };
+      console.error('Login failed:', err.response?.data?.message || err.message);
+      throw err;
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const register = async (userData) => {
+    setIsAuthLoading(true);
+    try {
+      const res = await registerUser(userData);
+      if (res && res.data) {
+        const userObj = {
+          id: res.data.user.id,
+          mobileNumber: res.data.user.mobileNumber,
+          name: `${userData.firstName} ${userData.lastName || ''}`.trim(),
+          gotra: userData.samajGotra || 'कश्यप',
+          city: userData.city || 'Indore',
+          photo: null,
+        };
+        localStorage.setItem('samaj_token', res.data.accessToken);
+        localStorage.setItem('samaj_user', JSON.stringify(userObj));
+        setAuthToken(res.data.accessToken);
+        setCurrentUser(userObj);
+        closeAuth();
+        return { success: true, user: userObj };
+      }
+    } catch (err) {
+      console.error('Registration failed:', err.response?.data?.message || err.message);
+      throw err;
     } finally {
       setIsAuthLoading(false);
     }
@@ -91,6 +107,7 @@ export const AuthProvider = ({ children }) => {
         closeAuth,
         setAuthMode,
         login,
+        register,
         logout,
       }}
     >

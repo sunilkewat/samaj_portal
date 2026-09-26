@@ -17,6 +17,9 @@ const io = new Server(server, {
 
 // Socket Namespaces
 const chatNamespace = io.of('/chat');
+app.set('chatNamespace', chatNamespace);
+app.set('io', io);
+
 chatNamespace.on('connection', (socket) => {
   console.log(`[Socket.IO /chat] Client connected: ${socket.id}`);
 

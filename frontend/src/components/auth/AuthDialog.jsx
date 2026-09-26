@@ -13,28 +13,57 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 export default function AuthDialog({ onNotification }) {
-  const { authModalOpen, closeAuth, authMode, setAuthMode, login, isAuthLoading } = useAuth();
+  const { authModalOpen, closeAuth, authMode, setAuthMode, login, register, isAuthLoading } = useAuth();
 
   const [mobileNumber, setMobileNumber] = useState('9876543210');
   const [password, setPassword] = useState('Admin@123456');
   const [fullName, setFullName] = useState('सुनील केवट');
   const [gotra, setGotra] = useState('कश्यप');
   const [city, setCity] = useState('Indore');
+  const [authError, setAuthError] = useState('');
 
   const handleSubmit = async () => {
-    const fallbackUser = {
-      id: 'af0e2307-527b-4ff2-827b-3767f68fb979',
-      mobileNumber,
-      name: authMode === 'register' ? fullName : 'सुनील केवट (Sunil Kewat)',
-      gotra,
-      city,
-    };
-
-    const res = await login(mobileNumber, password, fallbackUser);
-    if (res && res.success) {
-      if (onNotification) {
-        onNotification(`स्वागत है, ${res.user.name}! आप सफलतापूर्वक लॉगिन हो गए हैं। 🎉`);
+    setAuthError('');
+    try {
+      if (authMode === 'login') {
+        const res = await login(mobileNumber, password);
+        if (res && res.success) {
+          if (onNotification) onNotification(`स्वागत है, ${res.user.name}! आप सफलतापूर्वक लॉगिन हो गए हैं। 🎉`);
+        }
+      } else {
+        const nameParts = fullName.trim().split(' ');
+        const firstName = nameParts[0] || 'सदस्य';
+        const lastName = nameParts.slice(1).join(' ') || 'केवट';
+        const res = await register({
+          mobileNumber,
+          password,
+          firstName,
+          lastName,
+          gender: 'OTHER',
+          city: city || 'Indore',
+          state: 'MP',
+          samajGotra: gotra || 'कश्यप',
+        });
+        if (res && res.success) {
+          if (onNotification) onNotification(`सफलतापूर्वक पंजीकरण हो गया! स्वागत है, ${res.user.name}। 🎉`);
+        }
       }
+    } catch (err) {
+      setAuthError(err.response?.data?.message || err.message || 'लॉगिन विफल रहा, कृपया विवरण जांचें।');
+    }
+  };
+
+  const handleQuickLogin = async (mobile, pass, name) => {
+    setMobileNumber(mobile);
+    setPassword(pass);
+    setAuthError('');
+    try {
+      const res = await login(mobile, pass);
+      if (res && res.success) {
+        if (onNotification) onNotification(`स्वागत है, ${res.user.name}! आप सफलतापूर्वक लॉगिन हो गए हैं। 🚀`);
+      }
+    } catch (e) {
+      setAuthError('त्वरित लॉगिन में समस्या आई: ' + (e.response?.data?.message || e.message));
     }
   };
 
@@ -85,10 +114,37 @@ export default function AuthDialog({ onNotification }) {
           </>
         )}
 
-        {/* Quick Demo Hint */}
-        <Alert severity="info" sx={{ py: 0.5, fontSize: '0.82rem' }}>
-          💡 <strong>त्वरित डेमो:</strong> मोबाइल <code>9876543210</code> एवं पासवर्ड <code>Admin@123456</code> या सीधे 'लॉगिन करें' दबाएं।
-        </Alert>
+        {authError && (
+          <Alert severity="error" sx={{ py: 0.5, fontSize: '0.85rem' }}>
+            {authError}
+          </Alert>
+        )}
+
+        {/* Quick Demo Switcher */}
+        <Box sx={{ bgcolor: '#f8fafc', p: 1.5, borderRadius: 2, border: '1px solid #e2e8f0' }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', display: 'block', mb: 1 }}>
+            ⚡ त्वरित टेस्टिंग प्रोफाइल चुनें (Quick Test Profiles):
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => handleQuickLogin('9876543210', 'Admin@123456', 'सुनील केवट')}
+              sx={{ fontSize: '0.75rem', py: 0.5 }}
+            >
+              👤 सुनील केवट (Admin)
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="secondary"
+              onClick={() => handleQuickLogin('9822211223', 'Admin@123456', 'सपना बाथम')}
+              sx={{ fontSize: '0.75rem', py: 0.5 }}
+            >
+              👤 सपना बाथम (Member)
+            </Button>
+          </Box>
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>

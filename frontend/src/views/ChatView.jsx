@@ -84,7 +84,36 @@ export default function ChatView({ onNotification }) {
     scrollToBottom();
   }, [messages, activeGroupId]);
 
-  // Load groups from backend API (falls back to INITIAL_GROUPS)
+  const loadMessagesForGroup = async (groupId) => {
+    if (!groupId) return;
+    try {
+      const res = await fetchGroupMessages(groupId);
+      if (res && res.data) {
+        const apiMsgs = res.data.map((m) => ({
+          id: m.id,
+          groupId,
+          senderId: m.senderId,
+          senderName: m.sender?.profile
+            ? `${m.sender.profile.firstName || ''} ${m.sender.profile.lastName || ''}`.trim()
+            : 'सदस्य',
+          senderGotra: m.sender?.profile?.samajGotra || 'कश्यप',
+          text: m.messageText,
+          mediaUrl: m.mediaUrl,
+          mediaType: m.mediaType,
+          time: new Date(m.createdAt).toLocaleTimeString('hi-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          isMe: currentUser && m.senderId === currentUser.id,
+        }));
+        setMessages((prev) => ({ ...prev, [groupId]: apiMsgs }));
+      }
+    } catch (e) {
+      // Keep existing local messages
+    }
+  };
+
+  // Load groups from backend API
   useEffect(() => {
     fetchGroups()
       .then((res) => {
@@ -98,15 +127,25 @@ export default function ChatView({ onNotification }) {
             isMember: g.isMember,
           }));
           setGroups(apiGroups);
-          if (!activeGroupId && apiGroups[0]) {
-            setActiveGroupId(apiGroups[0].id);
-          }
+          const firstId = apiGroups[0].id;
+          setActiveGroupId((prev) => prev || firstId);
+          loadMessagesForGroup(firstId);
         }
       })
       .catch((err) => {
         console.warn('Groups API using mock data:', err.message);
       });
   }, []);
+
+  // Sync messages continuously every 2.5s or when active group / user changes
+  useEffect(() => {
+    if (!activeGroupId) return;
+    loadMessagesForGroup(activeGroupId);
+    const interval = setInterval(() => {
+      loadMessagesForGroup(activeGroupId);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [activeGroupId, currentUser]);
 
   // Initialize Socket.IO connection
   useEffect(() => {
@@ -127,32 +166,13 @@ export default function ChatView({ onNotification }) {
 
       socket.on('new_message', (payload) => {
         if (payload && payload.groupId) {
-          setMessages((prev) => {
-            const groupMsgs = prev[payload.groupId] || [];
-            if (groupMsgs.some((m) => m.id === payload.id)) {
-              return prev;
-            }
-            return {
-              ...prev,
-              [payload.groupId]: [
-                ...groupMsgs,
-                {
-                  id: payload.id || `msg-${Date.now()}`,
-                  senderId: payload.senderId,
-                  senderName: payload.senderName || 'स्वजातीय सदस्य',
-                  senderGotra: payload.senderGotra || 'कश्यप',
-                  text: payload.messageText || payload.text,
-                  mediaUrl: payload.mediaUrl || null,
-                  mediaType: payload.mediaType || null,
-                  mediaName: payload.mediaName || null,
-                  time:
-                    payload.time ||
-                    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                  isMe: currentUser && payload.senderId === currentUser.id,
-                },
-              ],
-            };
-          });
+          loadMessagesForGroup(payload.groupId);
+        }
+      });
+
+      socket.on('member_added', (payload) => {
+        if (payload && payload.groupId) {
+          loadMessagesForGroup(payload.groupId);
         }
       });
 
@@ -164,7 +184,7 @@ export default function ChatView({ onNotification }) {
     } catch (e) {
       console.warn('Socket.IO connection skipped:', e.message);
     }
-  }, [currentUser]);
+  }, [currentUser, activeGroupId]);
 
   // Handle Switching Groups
   const handleSelectGroup = (groupId) => {
@@ -173,32 +193,7 @@ export default function ChatView({ onNotification }) {
       socketRef.current.emit('join_group', { groupId });
     }
     setActiveGroupId(groupId);
-
-    fetchGroupMessages(groupId)
-      .then((res) => {
-        if (res && res.data && res.data.length > 0) {
-          const apiMsgs = res.data.map((m) => ({
-            id: m.id,
-            senderId: m.senderId,
-            senderName: m.sender?.profile
-              ? `${m.sender.profile.firstName} ${m.sender.profile.lastName}`
-              : 'सदस्य',
-            senderGotra: m.sender?.profile?.samajGotra || 'कश्यप',
-            text: m.messageText,
-            mediaUrl: m.mediaUrl,
-            mediaType: m.mediaType,
-            time: new Date(m.createdAt).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-            isMe: currentUser && m.senderId === currentUser.id,
-          }));
-          setMessages((prev) => ({ ...prev, [groupId]: apiMsgs }));
-        }
-      })
-      .catch((e) => {
-        // Fallback to local
-      });
+    loadMessagesForGroup(groupId);
   };
 
   // Handle File Attachment Selection
@@ -279,6 +274,7 @@ export default function ChatView({ onNotification }) {
       } else {
         await sendGroupMessage(activeGroupId, { messageText: textToSend });
       }
+      loadMessagesForGroup(activeGroupId);
     } catch (err) {
       console.warn('Message send API error:', err.message);
     }
@@ -301,7 +297,7 @@ export default function ChatView({ onNotification }) {
       senderName: 'सिस्टम सूचना',
       senderGotra: 'समाज',
       text: `👋 ${currentUser?.name || 'सदस्य'} ने ${member.name} को इस समूह में जोड़ा। हार्दिक स्वागत! 💐`,
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit' }),
       isMe: false,
     };
 
@@ -311,14 +307,18 @@ export default function ChatView({ onNotification }) {
     }));
 
     if (onNotification) {
-      onNotification(`${member.name} को '${activeGroup.name}' में सफलतापूर्वक जोड़ा गया! 🎉`);
+      onNotification(`${member.name} को '${activeGroup?.name || 'समूह'}' में सफलतापूर्वक जोड़ा गया! 🎉`);
     }
 
+    // Persist to server
     try {
       await addGroupMember(activeGroupId, member.id);
     } catch (e) {
       // Ignored
     }
+    sendGroupMessage(activeGroupId, { messageText: systemMsg.text })
+      .then(() => loadMessagesForGroup(activeGroupId))
+      .catch(() => {});
   };
 
   // Handle Create New Group Submit
@@ -330,8 +330,9 @@ export default function ChatView({ onNotification }) {
       return;
     }
 
+    const tempId = `group-${Date.now()}`;
     const newGroup = {
-      id: `group-${Date.now()}`,
+      id: tempId,
       name: newGroupName.trim(),
       description: newGroupDesc.trim() || 'समाज चर्चा समूह',
       membersCount: 1,
@@ -340,16 +341,29 @@ export default function ChatView({ onNotification }) {
     };
 
     setGroups((prev) => [newGroup, ...prev]);
-    setActiveGroupId(newGroup.id);
+    setActiveGroupId(tempId);
     setCreateGroupModal(false);
     setNewGroupName('');
     setNewGroupDesc('');
     if (onNotification) onNotification(`'${newGroup.name}' समूह सफलतापूर्वक बनाया गया! 🎉`);
 
     try {
-      await createGroup({ name: newGroupName.trim(), description: newGroupDesc.trim() });
+      const res = await createGroup({ name: newGroupName.trim(), description: newGroupDesc.trim() });
+      if (res && res.data) {
+        const serverGroup = {
+          id: res.data.id,
+          name: res.data.name,
+          description: res.data.description,
+          membersCount: 1,
+          icon: '🏛️',
+          isMember: true,
+        };
+        setGroups((prev) => [serverGroup, ...prev.filter((g) => g.id !== tempId)]);
+        setActiveGroupId(serverGroup.id);
+        loadMessagesForGroup(serverGroup.id);
+      }
     } catch (e) {
-      // Handled
+      console.warn('Group creation server error:', e.message);
     }
   };
 

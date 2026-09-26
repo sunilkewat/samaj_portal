@@ -176,6 +176,7 @@ class GroupsService {
    */
   async addMember(requesterId, groupId, targetUserId, role = 'MEMBER') {
     if (!isUUID(groupId)) throw new ApiError(400, 'Invalid group ID format');
+    if (!isUUID(requesterId)) throw new ApiError(401, 'Invalid requester authorization');
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) throw new ApiError(404, 'Group not found');
 

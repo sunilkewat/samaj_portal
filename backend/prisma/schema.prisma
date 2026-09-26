@@ -1,0 +1,901 @@
+// =============================================================================
+// SAMAJ PORTAL - ENTERPRISE PRISMA DATABASE SCHEMA
+// Optimized for PostgreSQL with B-Tree & GIN Indexes, Soft Deletes, & RBAC
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum PostVisibility {
+  PUBLIC
+  MEMBERS_ONLY
+  GROUP_ONLY
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  AUDIO
+}
+
+enum GroupType {
+  PUBLIC
+  PRIVATE
+}
+
+enum GroupMemberRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum MatrimonialMaritalStatus {
+  NEVER_MARRIED
+  DIVORCED
+  WIDOWED
+  AWAITING_DIVORCE
+}
+
+enum InterestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum RsvpStatus {
+  GOING
+  MAYBE
+  CANT_GO
+}
+
+enum NotificationType {
+  POST_LIKE
+  POST_COMMENT
+  COMMENT_REPLY
+  GROUP_INVITE
+  GROUP_MESSAGE
+  MATRIMONIAL_INTEREST
+  EVENT_REMINDER
+  MEMORIAL_TRIBUTE
+  DONATION_RECEIPT
+  BLOOD_SOS
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+enum ReportStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+// -----------------------------------------------------------------------------
+// 1. AUTHENTICATION & CORE USERS
+// -----------------------------------------------------------------------------
+
+model User {
+  id                 String             @id @default(uuid()) @db.Uuid
+  mobileNumber       String             @unique @db.VarChar(15)
+  email              String?            @unique @db.VarChar(255)
+  passwordHash       String             @db.VarChar(255)
+  verificationStatus VerificationStatus @default(PENDING)
+  isActive           Boolean            @default(true)
+  isProfileComplete  Boolean            @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+
+  // Relations
+  profile            UserProfile?
+  familyMembers      UserFamilyMember[]
+  devices            UserDevice[]
+  sessions           UserSession[]
+  userRoles          UserRole[]
+  posts              Post[]
+  comments           Comment[]
+  postLikes          PostLike[]
+  commentLikes       CommentLike[]
+  postShares         PostShare[]
+  postViews          PostView[]
+  groupMemberships   GroupMember[]
+  groupMessages      GroupMessage[]
+  groupMessageReads  GroupMessageRead[]
+  memorials          Memorial[]
+  memorialTributes   MemorialTribute[]
+  matrimonialProfile MatrimonialProfile?
+  sentInterests      MatrimonialInterest[]  @relation("SentInterests")
+  receivedInterests  MatrimonialInterest[]  @relation("ReceivedInterests")
+  shortlistsMade     MatrimonialShortlist[] @relation("ShortlistsMade")
+  blockedProfiles    MatrimonialBlock[]     @relation("BlocksMade")
+  eventRegistrations EventRegistration[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  reportsFiled       Report[]               @relation("ReportsFiled")
+  bloodDonors        BloodDonor?
+  bloodRequests      BloodRequest[]
+  donations          Donation[]
+
+  @@index([mobileNumber])
+  @@index([email])
+  @@index([verificationStatus])
+  @@map("users")
+}
+
+model UserProfile {
+  id             String      @id @default(uuid()) @db.Uuid
+  userId         String      @unique @db.Uuid
+  firstName      String      @db.VarChar(100)
+  lastName       String      @db.VarChar(100)
+  gender         Gender
+  dateOfBirth    DateTime?   @db.Date
+  bloodGroup     BloodGroup?
+  profilePhoto   String?     @db.Text
+  coverPhoto     String?     @db.Text
+  bio            String?     @db.VarChar(500)
+  occupation     String?     @db.VarChar(150)
+  education      String?     @db.VarChar(150)
+  samajGotra     String?     @db.VarChar(100)
+  samajCategory  String?     @db.VarChar(100)
+  nativeVillage  String?     @db.VarChar(150)
+  addressLine1   String?     @db.VarChar(255)
+  addressLine2   String?     @db.VarChar(255)
+  city           String      @db.VarChar(100)
+  state          String      @db.VarChar(100)
+  pincode        String?     @db.VarChar(10)
+  country        String      @default("India") @db.VarChar(100)
+  privacyLevel   String      @default("PUBLIC") @db.VarChar(20)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([city])
+  @@index([state])
+  @@index([occupation])
+  @@index([bloodGroup])
+  @@index([samajGotra])
+  @@map("user_profiles")
+}
+
+model UserFamilyMember {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  fullName     String    @db.VarChar(150)
+  relationship String    @db.VarChar(50) // Father, Mother, Spouse, Child, Sibling
+  gender       Gender
+  age          Int?
+  occupation   String?   @db.VarChar(100)
+  education    String?   @db.VarChar(100)
+  isAlive      Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_family_members")
+}
+
+model UserDevice {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  fcmToken     String   @unique @db.Text
+  deviceType   String   @db.VarChar(50) // ANDROID, IOS, WEB
+  deviceModel  String?  @db.VarChar(100)
+  appVersion   String?  @db.VarChar(20)
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_devices")
+}
+
+model UserSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  refreshToken String    @unique @db.Text
+  ipAddress    String?   @db.VarChar(50)
+  userAgent    String?   @db.Text
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshToken])
+  @@map("user_sessions")
+}
+
+model OtpVerification {
+  id        String   @id @default(uuid()) @db.Uuid
+  identifier String  @db.VarChar(100) // mobile or email
+  otpCode   String   @db.VarChar(6)
+  purpose   String   @db.VarChar(50) // LOGIN, REGISTRATION, FORGOT_PASSWORD
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([identifier, otpCode])
+  @@map("otp_verifications")
+}
+
+// -----------------------------------------------------------------------------
+// 2. ROLE-BASED ACCESS CONTROL (RBAC)
+// -----------------------------------------------------------------------------
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(50) // SUPER_ADMIN, SAMAJ_ADMIN, COMMITTEE_MEMBER, MODERATOR, MEMBER
+  description String?  @db.VarChar(255)
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(100) // e.g., posts:create, members:verify, matrimonial:moderate
+  module      String   @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(uuid()) @db.Uuid
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// -----------------------------------------------------------------------------
+// 3. SOCIAL FEED, POSTS, COMMENTS, REACTIONS
+// -----------------------------------------------------------------------------
+
+model Post {
+  id         String         @id @default(uuid()) @db.Uuid
+  authorId   String         @db.Uuid
+  groupId    String?        @db.Uuid
+  content    String?        @db.Text
+  visibility PostVisibility @default(PUBLIC)
+  isPinned   Boolean        @default(false)
+  likesCount Int            @default(0)
+  commentsCount Int         @default(0)
+  sharesCount   Int         @default(0)
+  viewsCount    Int         @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  deletedAt  DateTime?
+
+  author   User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  group    Group?      @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  media    PostMedia[]
+  comments Comment[]
+  likes    PostLike[]
+  shares   PostShare[]
+  views    PostView[]
+
+  @@index([authorId])
+  @@index([groupId])
+  @@index([createdAt(sort: Desc)])
+  @@index([isPinned])
+  @@map("posts")
+}
+
+model PostMedia {
+  id        String    @id @default(uuid()) @db.Uuid
+  postId    String    @db.Uuid
+  fileUrl   String    @db.Text
+  mediaType MediaType
+  thumbnail String?   @db.Text
+  fileSize  Int?
+  mimeType  String?   @db.VarChar(100)
+  createdAt DateTime  @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("post_media")
+}
+
+model Comment {
+  id        String    @id @default(uuid()) @db.Uuid
+  postId    String    @db.Uuid
+  authorId  String    @db.Uuid
+  parentId  String?   @db.Uuid // Nested replies
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  post    Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[]     @relation("CommentReplies")
+  likes   CommentLike[]
+
+  @@index([postId])
+  @@index([parentId])
+  @@map("comments")
+}
+
+model PostLike {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("post_likes")
+}
+
+model CommentLike {
+  id        String   @id @default(uuid()) @db.Uuid
+  commentId String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("comment_likes")
+}
+
+model PostShare {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  userId    String   @db.Uuid
+  channel   String?  @db.VarChar(50) // WHATSAPP, FACEBOOK, IN_APP
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("post_shares")
+}
+
+model PostView {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  userId    String?  @db.Uuid
+  ipAddress String?  @db.VarChar(50)
+  viewedAt  DateTime @default(now())
+
+  post Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@map("post_views")
+}
+
+// -----------------------------------------------------------------------------
+// 4. GROUPS & REAL-TIME GROUP CHAT
+// -----------------------------------------------------------------------------
+
+model Group {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(150)
+  description String?   @db.Text
+  groupImage  String?   @db.Text
+  groupType   GroupType @default(PUBLIC)
+  createdById String    @db.Uuid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  members  GroupMember[]
+  messages GroupMessage[]
+  posts    Post[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String          @id @default(uuid()) @db.Uuid
+  groupId  String          @db.Uuid
+  userId   String          @db.Uuid
+  role     GroupMemberRole @default(MEMBER)
+  isMuted  Boolean         @default(false)
+  joinedAt DateTime        @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model GroupMessage {
+  id          String    @id @default(uuid()) @db.Uuid
+  groupId     String    @db.Uuid
+  senderId    String    @db.Uuid
+  messageText String?   @db.Text
+  mediaUrl    String?   @db.Text
+  mediaType   MediaType?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  group Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  reads  GroupMessageRead[]
+
+  @@index([groupId, createdAt(sort: Desc)])
+  @@map("group_messages")
+}
+
+model GroupMessageRead {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  readAt    DateTime @default(now())
+
+  message GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("group_message_reads")
+}
+
+// -----------------------------------------------------------------------------
+// 5. MEMORIALS / SHOK SAMACHAR & TRIBUTES
+// -----------------------------------------------------------------------------
+
+model Memorial {
+  id            String    @id @default(uuid()) @db.Uuid
+  createdById   String    @db.Uuid
+  fullName      String    @db.VarChar(150)
+  gender        Gender
+  dateOfBirth   DateTime? @db.Date
+  dateOfDeath   DateTime  @db.Date
+  nativeVillage String?   @db.VarChar(100)
+  biography     String?   @db.Text
+  familyDetails String?   @db.Text
+  isApproved    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  photos    MemorialPhoto[]
+  tributes  MemorialTribute[]
+
+  @@index([dateOfDeath(sort: Desc)])
+  @@index([isApproved])
+  @@map("memorials")
+}
+
+model MemorialPhoto {
+  id         String   @id @default(uuid()) @db.Uuid
+  memorialId String   @db.Uuid
+  photoUrl   String   @db.Text
+  caption    String?  @db.VarChar(200)
+  createdAt  DateTime @default(now())
+
+  memorial Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+
+  @@map("memorial_photos")
+}
+
+model MemorialTribute {
+  id          String   @id @default(uuid()) @db.Uuid
+  memorialId  String   @db.Uuid
+  userId      String   @db.Uuid
+  message     String   @db.Text
+  isCandleLit Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  memorial Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([memorialId])
+  @@map("memorial_tributes")
+}
+
+// -----------------------------------------------------------------------------
+// 6. MATRIMONIAL PORTAL (RISHTEY)
+// -----------------------------------------------------------------------------
+
+model MatrimonialProfile {
+  id              String                   @id @default(uuid()) @db.Uuid
+  userId          String                   @unique @db.Uuid
+  gender          Gender
+  dob             DateTime                 @db.Date
+  heightCm        Int?
+  maritalStatus   MatrimonialMaritalStatus @default(NEVER_MARRIED)
+  religion        String                   @default("Hindu") @db.VarChar(50)
+  samajCategory   String?                  @db.VarChar(100)
+  gotraSelf       String                   @db.VarChar(100)
+  gotraMother     String?                  @db.VarChar(100)
+  highestDegree   String                   @db.VarChar(100)
+  employedIn      String?                  @db.VarChar(100) // Private, Govt, Business
+  occupationTitle String?                  @db.VarChar(150)
+  annualIncome    String?                  @db.VarChar(50)
+  workCity        String?                  @db.VarChar(100)
+  workState       String?                  @db.VarChar(100)
+  workCountry     String?                  @default("India") @db.VarChar(100)
+  diet            String?                  @db.VarChar(30)
+  aboutCandidate  String?                  @db.Text
+  partnerPref     String?                  @db.Text
+  horoscopeUrl    String?                  @db.Text // Kundli attachment
+  isPhotoBlurred  Boolean                  @default(false)
+  isApproved      Boolean                  @default(true)
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  deletedAt       DateTime?
+
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos     MatrimonialPhoto[]
+  shortlists MatrimonialShortlist[]
+  blocks     MatrimonialBlock[]
+
+  @@index([gender, maritalStatus])
+  @@index([gotraSelf])
+  @@index([workCity])
+  @@map("matrimonial_profiles")
+}
+
+model MatrimonialPhoto {
+  id         String   @id @default(uuid()) @db.Uuid
+  profileId  String   @db.Uuid
+  photoUrl   String   @db.Text
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  profile MatrimonialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("matrimonial_photos")
+}
+
+model MatrimonialInterest {
+  id         String         @id @default(uuid()) @db.Uuid
+  senderId   String         @db.Uuid
+  receiverId String         @db.Uuid
+  status     InterestStatus @default(PENDING)
+  message    String?        @db.VarChar(300)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  sender   User @relation("SentInterests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedInterests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+  @@map("matrimonial_interests")
+}
+
+model MatrimonialShortlist {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  shortlistProfileId String   @db.Uuid
+  createdAt          DateTime @default(now())
+
+  user    User               @relation("ShortlistsMade", fields: [userId], references: [id], onDelete: Cascade)
+  profile MatrimonialProfile @relation(fields: [shortlistProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, shortlistProfileId])
+  @@map("matrimonial_shortlists")
+}
+
+model MatrimonialBlock {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  blockedProfileId String  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  user    User               @relation("BlocksMade", fields: [userId], references: [id], onDelete: Cascade)
+  profile MatrimonialProfile @relation(fields: [blockedProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, blockedProfileId])
+  @@map("matrimonial_blocks")
+}
+
+// -----------------------------------------------------------------------------
+// 7. EVENTS & SAMMELANS
+// -----------------------------------------------------------------------------
+
+model Event {
+  id          String      @id @default(uuid()) @db.Uuid
+  title       String      @db.VarChar(200)
+  description String      @db.Text
+  bannerUrl   String?     @db.Text
+  venueName   String      @db.VarChar(200)
+  venueCity   String      @db.VarChar(100)
+  venueState  String      @db.VarChar(100)
+  startDateTime DateTime
+  endDateTime   DateTime
+  organizer   String      @db.VarChar(150)
+  status      EventStatus @default(UPCOMING)
+  entryFee    Decimal     @default(0.0) @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  registrations EventRegistration[]
+
+  @@index([startDateTime])
+  @@index([venueCity])
+  @@map("events")
+}
+
+model EventRegistration {
+  id         String     @id @default(uuid()) @db.Uuid
+  eventId    String     @db.Uuid
+  userId     String     @db.Uuid
+  rsvp       RsvpStatus @default(GOING)
+  guestCount Int        @default(1)
+  notes      String?    @db.VarChar(255)
+  createdAt  DateTime   @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_registrations")
+}
+
+// -----------------------------------------------------------------------------
+// 8. ANNOUNCEMENTS & OFFICIAL CIRCULARS
+// -----------------------------------------------------------------------------
+
+model Announcement {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(250)
+  content     String    @db.Text
+  attachment  String?   @db.Text // PDF circular
+  isPinned    Boolean   @default(false)
+  issuedBy    String    @db.VarChar(150) // Samaj Executive Board
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([isPinned, createdAt(sort: Desc)])
+  @@map("announcements")
+}
+
+// -----------------------------------------------------------------------------
+// 9. BLOOD DONORS & EMERGENCY SOS DIRECTORY (COMMUNITY CRITICAL)
+// -----------------------------------------------------------------------------
+
+model BloodDonor {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @unique @db.Uuid
+  bloodGroup     BloodGroup
+  city           String     @db.VarChar(100)
+  state          String     @db.VarChar(100)
+  isAvailable    Boolean    @default(true)
+  lastDonatedAt  DateTime?  @db.Date
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bloodGroup, city, isAvailable])
+  @@map("blood_donors")
+}
+
+model BloodRequest {
+  id             String     @id @default(uuid()) @db.Uuid
+  requestedById  String     @db.Uuid
+  patientName    String     @db.VarChar(150)
+  hospitalName   String     @db.VarChar(200)
+  hospitalCity   String     @db.VarChar(100)
+  bloodGroup     BloodGroup
+  unitsNeeded    Int        @default(1)
+  contactNumber  String     @db.VarChar(15)
+  urgencyLevel   String     @default("URGENT") @db.VarChar(20) // URGENT, CRITICAL
+  isFulfilled    Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  requestedBy User @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  @@index([bloodGroup, hospitalCity, isFulfilled])
+  @@map("blood_requests")
+}
+
+// -----------------------------------------------------------------------------
+// 10. DONATIONS & SAHYOG NIDHI (COMMUNITY FUNDRAISING)
+// -----------------------------------------------------------------------------
+
+model DonationCampaign {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(200)
+  description String    @db.Text
+  targetAmount Decimal  @db.Decimal(12, 2)
+  raisedAmount Decimal  @default(0.0) @db.Decimal(12, 2)
+  startDate   DateTime
+  endDate     DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  donations Donation[]
+
+  @@map("donation_campaigns")
+}
+
+model Donation {
+  id             String    @id @default(uuid()) @db.Uuid
+  campaignId     String?   @db.Uuid
+  userId         String?   @db.Uuid
+  donorName      String    @db.VarChar(150)
+  donorMobile    String    @db.VarChar(15)
+  amount         Decimal   @db.Decimal(12, 2)
+  paymentMode    String    @db.VarChar(50) // UPI, NET_BANKING, RAZORPAY
+  transactionRef String?   @unique @db.VarChar(100)
+  receiptNumber  String    @unique @db.VarChar(50)
+  isVerified     Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  campaign DonationCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  user     User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId])
+  @@index([donorMobile])
+  @@map("donations")
+}
+
+// -----------------------------------------------------------------------------
+// 11. NOTIFICATIONS & PUSH TOKENS
+// -----------------------------------------------------------------------------
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(150)
+  message   String           @db.Text
+  dataJson  Json?            // Metadata for deep linking
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// -----------------------------------------------------------------------------
+// 12. REPORTS, AUDIT LOGS, FILES & PLATFORM SETTINGS
+// -----------------------------------------------------------------------------
+
+model Report {
+  id          String       @id @default(uuid()) @db.Uuid
+  reportedById String      @db.Uuid
+  targetType  String       @db.VarChar(50) // POST, USER, COMMENT, MATRIMONIAL
+  targetId    String       @db.Uuid
+  reason      String       @db.VarChar(255)
+  description String?      @db.Text
+  status      ReportStatus @default(PENDING)
+  actionTaken String?      @db.VarChar(255)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  reporter User @relation("ReportsFiled", fields: [reportedById], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("reports")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  action    String   @db.VarChar(100) // e.g. USER_LOGIN, PROFILE_VERIFIED, ROLE_ASSIGNED
+  entity    String   @db.VarChar(50)  // Table or Resource affected
+  entityId  String?  @db.VarChar(100)
+  metadata  Json?
+  ipAddress String?  @db.VarChar(50)
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model FileRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  originalName String   @db.VarChar(255)
+  storageKey   String   @unique @db.VarChar(500)
+  url          String   @db.Text
+  mimeType     String   @db.VarChar(100)
+  fileSize     Int
+  uploadedBy   String?  @db.Uuid
+  createdAt    DateTime @default(now())
+
+  @@map("files")
+}
+
+model Setting {
+  key         String   @id @db.VarChar(100)
+  value       String   @db.Text
+  description String?  @db.VarChar(255)
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}

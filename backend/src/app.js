@@ -27,8 +27,13 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Import Feature Routes
+const authRoutes = require('./modules/auth/auth.routes');
+
 // API Routes Mounting Point
 const API_PREFIX = process.env.API_PREFIX || '/api/v1';
+
+app.use(`${API_PREFIX}/auth`, authRoutes);
 
 app.get(`${API_PREFIX}`, (req, res) => {
   res.json({

@@ -15,6 +15,7 @@ class AuthController {
 
   async login(req, res, next) {
     try {
+      req.body.identifier = req.body.identifier || req.body.mobileNumber;
       const ip = req.ip || req.connection.remoteAddress;
       const userAgent = req.headers['user-agent'] || 'Unknown';
       const result = await authService.login(req.body, ip, userAgent);

@@ -127,9 +127,12 @@ export default function ChatView({ onNotification }) {
             isMember: g.isMember,
           }));
           setGroups(apiGroups);
-          const firstId = apiGroups[0].id;
-          setActiveGroupId((prev) => prev || firstId);
-          loadMessagesForGroup(firstId);
+          setActiveGroupId((prev) => {
+            const hasPrev = apiGroups.some((g) => g.id === prev);
+            const targetId = hasPrev ? prev : apiGroups[0].id;
+            loadMessagesForGroup(targetId);
+            return targetId;
+          });
         }
       })
       .catch((err) => {
@@ -234,9 +237,12 @@ export default function ChatView({ onNotification }) {
       else mediaType = 'IMAGE';
     }
 
+    const activeGroup = (groups || []).find((g) => g.id === activeGroupId) || groups[0];
+    const targetGroupId = activeGroup ? activeGroup.id : activeGroupId;
+
     const newMsgObj = {
       id: `local-msg-${Date.now()}`,
-      groupId: activeGroupId,
+      groupId: targetGroupId,
       senderId: currentUser.id,
       senderName: currentUser.name || 'सुनील केवट',
       senderGotra: currentUser.gotra || 'कश्यप',
@@ -251,7 +257,7 @@ export default function ChatView({ onNotification }) {
     // Optimistically update message list
     setMessages((prev) => ({
       ...prev,
-      [activeGroupId]: [...(prev[activeGroupId] || []), newMsgObj],
+      [targetGroupId]: [...(prev[targetGroupId] || []), newMsgObj],
     }));
 
     const fileToUpload = selectedChatMedia;
@@ -270,29 +276,35 @@ export default function ChatView({ onNotification }) {
         const formData = new FormData();
         if (textToSend) formData.append('messageText', textToSend);
         formData.append('media', fileToUpload);
-        await sendGroupMessage(activeGroupId, formData);
+        await sendGroupMessage(targetGroupId, formData);
       } else {
-        await sendGroupMessage(activeGroupId, { messageText: textToSend });
+        await sendGroupMessage(targetGroupId, { messageText: textToSend });
       }
-      loadMessagesForGroup(activeGroupId);
+      loadMessagesForGroup(targetGroupId);
     } catch (err) {
       console.warn('Message send API error:', err.message);
+      if (onNotification) {
+        onNotification('संदेश भेजने में समस्या: ' + (err.response?.data?.message || err.message));
+      }
     }
   };
 
   // Handle Add Member to Current Active Group
   const handleAddMember = async (member) => {
+    const activeGroup = (groups || []).find((g) => g.id === activeGroupId) || groups[0];
+    const targetGroupId = activeGroup ? activeGroup.id : activeGroupId;
+
     setAddedMembersState((prev) => ({ ...prev, [member.id]: true }));
 
     // Increment member count in state
     setGroups((prev) =>
-      prev.map((g) => (g.id === activeGroupId ? { ...g, membersCount: g.membersCount + 1 } : g))
+      prev.map((g) => (g.id === targetGroupId ? { ...g, membersCount: g.membersCount + 1 } : g))
     );
 
     // Add a system welcome message into the chat
     const systemMsg = {
       id: `system-${Date.now()}`,
-      groupId: activeGroupId,
+      groupId: targetGroupId,
       senderId: 'system',
       senderName: 'सिस्टम सूचना',
       senderGotra: 'समाज',
@@ -303,7 +315,7 @@ export default function ChatView({ onNotification }) {
 
     setMessages((prev) => ({
       ...prev,
-      [activeGroupId]: [...(prev[activeGroupId] || []), systemMsg],
+      [targetGroupId]: [...(prev[targetGroupId] || []), systemMsg],
     }));
 
     if (onNotification) {
@@ -312,12 +324,12 @@ export default function ChatView({ onNotification }) {
 
     // Persist to server
     try {
-      await addGroupMember(activeGroupId, member.id);
+      await addGroupMember(targetGroupId, member.id);
     } catch (e) {
       // Ignored
     }
-    sendGroupMessage(activeGroupId, { messageText: systemMsg.text })
-      .then(() => loadMessagesForGroup(activeGroupId))
+    sendGroupMessage(targetGroupId, { messageText: systemMsg.text })
+      .then(() => loadMessagesForGroup(targetGroupId))
       .catch(() => {});
   };
 

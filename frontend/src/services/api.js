@@ -47,7 +47,11 @@ export const togglePostLike = async (postId) => {
 };
 
 export const loginUser = async (mobileNumber, password) => {
-  const res = await apiClient.post('/auth/login', { mobileNumber, password });
+  const res = await apiClient.post('/auth/login', {
+    identifier: mobileNumber,
+    mobileNumber,
+    password,
+  });
   return res.data;
 };
 

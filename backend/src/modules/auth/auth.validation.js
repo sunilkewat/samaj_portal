@@ -17,14 +17,13 @@ const registerSchema = Joi.object({
 });
 
 const loginSchema = Joi.object({
-  identifier: Joi.string().required().messages({
-    'any.required': 'Mobile number or email is required',
-  }),
+  identifier: Joi.string().optional(),
+  mobileNumber: Joi.string().optional(),
   password: Joi.string().required(),
   deviceType: Joi.string().valid('ANDROID', 'IOS', 'WEB').default('WEB'),
   fcmToken: Joi.string().optional(),
   deviceModel: Joi.string().optional(),
-});
+}).or('identifier', 'mobileNumber');
 
 const sendOtpSchema = Joi.object({
   identifier: Joi.string().required(),

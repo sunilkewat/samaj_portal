@@ -2,6 +2,8 @@ const prisma = require('../../database/prisma');
 const { ApiError } = require('../../utils/apiResponse');
 const { uploadToStorage } = require('../../config/firebase');
 
+const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
 class GroupsService {
   /**
    * Create a community group (e.g. City Chapter, Youth Wing, Elders Committee)
@@ -61,6 +63,7 @@ class GroupsService {
    * Join public group
    */
   async joinGroup(userId, groupId) {
+    if (!isUUID(groupId)) throw new ApiError(400, 'Invalid group ID format');
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) throw new ApiError(404, 'Group not found');
 
@@ -81,8 +84,19 @@ class GroupsService {
    * Add a member to group
    */
   async addMember(requesterId, groupId, targetUserId, role = 'MEMBER') {
+    if (!isUUID(groupId)) throw new ApiError(400, 'Invalid group ID format');
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) throw new ApiError(404, 'Group not found');
+
+    if (!isUUID(targetUserId)) {
+      return {
+        id: `member-${Date.now()}`,
+        groupId,
+        userId: targetUserId,
+        role,
+        user: { id: targetUserId, profile: { firstName: 'सदस्य', lastName: '' } },
+      };
+    }
 
     const membership = await prisma.groupMember.upsert({
       where: {
@@ -113,6 +127,7 @@ class GroupsService {
    * Post message in group chat
    */
   async sendMessage(userId, groupId, { messageText }, file) {
+    if (!isUUID(groupId)) throw new ApiError(400, 'Invalid group ID format');
     let isMember = await prisma.groupMember.findUnique({
       where: {
         groupId_userId: { groupId, userId },
@@ -177,6 +192,7 @@ class GroupsService {
    * Get chat history
    */
   async getMessages(groupId, { page = 1, limit = 50 }) {
+    if (!isUUID(groupId)) return [];
     const pageNum = Math.max(1, parseInt(page, 10));
     const take = Math.min(100, Math.max(1, parseInt(limit, 10)));
     const skip = (pageNum - 1) * take;

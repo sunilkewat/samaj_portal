@@ -4,11 +4,14 @@ const { uploadToStorage } = require('../../config/firebase');
 
 class PostsService {
   /**
-   * Create a new community post with media attachments
+   * Create a new community post with media attachments and/or YouTube URL
    */
-  async createPost(userId, { content, visibility = 'PUBLIC', isPinned = false }, files = []) {
-    if (!content && (!files || files.length === 0)) {
-      throw new ApiError(400, 'Post must contain either text content or media');
+  async createPost(userId, { content, visibility = 'PUBLIC', isPinned = false, youtubeUrl = null }, files = []) {
+    const cleanContent = content ? content.trim() : null;
+    const cleanYoutubeUrl = youtubeUrl && typeof youtubeUrl === 'string' && youtubeUrl.trim().length > 0 ? youtubeUrl.trim() : null;
+
+    if (!cleanContent && (!files || files.length === 0) && !cleanYoutubeUrl) {
+      throw new ApiError(400, 'Post must contain either text content, media files, or a YouTube URL');
     }
 
     // Upload files to Firebase if any
@@ -16,13 +19,22 @@ class PostsService {
     for (const file of files) {
       let mediaType = 'IMAGE';
       if (file.mimetype.startsWith('video/')) mediaType = 'VIDEO';
-      else if (file.mimetype === 'application/pdf') mediaType = 'DOCUMENT';
+      else if (file.mimetype.startsWith('audio/')) mediaType = 'AUDIO';
+      else if (
+        file.mimetype === 'application/pdf' ||
+        file.mimetype.includes('document') ||
+        file.mimetype.includes('word')
+      ) {
+        mediaType = 'DOCUMENT';
+      }
 
-      const destination = `samaj_posts/${userId}/${Date.now()}_${file.originalname}`;
+      const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const destination = `samaj_posts/${userId}/${Date.now()}_${safeName}`;
       let fileUrl = '';
       try {
         fileUrl = await uploadToStorage(file.buffer, destination, file.mimetype);
       } catch (e) {
+        console.warn('Firebase upload error, fallback to URL:', e.message);
         fileUrl = `https://storage.googleapis.com/livetdsbucket/${destination}`;
       }
 
@@ -37,7 +49,8 @@ class PostsService {
     const post = await prisma.post.create({
       data: {
         authorId: userId,
-        content,
+        content: cleanContent,
+        youtubeUrl: cleanYoutubeUrl,
         visibility,
         isPinned: Boolean(isPinned),
         media: {
@@ -108,7 +121,7 @@ class PostsService {
           },
           media: true,
           likes: {
-            where: { userId: currentUserId },
+            where: { userId: currentUserId || '00000000-0000-0000-0000-000000000000' },
             select: { id: true },
           },
         },
@@ -116,7 +129,7 @@ class PostsService {
     ]);
 
     const formattedPosts = posts.map((p) => {
-      const isLiked = p.likes.length > 0;
+      const isLiked = p.likes && p.likes.length > 0;
       const { likes: _, ...rest } = p;
       return { ...rest, isLiked };
     });

@@ -330,6 +330,7 @@ model Post {
   authorId   String         @db.Uuid
   groupId    String?        @db.Uuid
   content    String?        @db.Text
+  youtubeUrl String?        @db.VarChar(500)
   visibility PostVisibility @default(PUBLIC)
   isPinned   Boolean        @default(false)
   likesCount Int            @default(0)

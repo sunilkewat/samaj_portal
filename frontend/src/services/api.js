@@ -26,3 +26,32 @@ export const checkApiHealth = async () => {
     return { status: 'offline', error: err.message };
   }
 };
+
+export const fetchFeed = async (page = 1, limit = 15) => {
+  const res = await apiClient.get('/posts', { params: { page, limit } });
+  return res.data;
+};
+
+export const createNewPost = async (formData) => {
+  const res = await apiClient.post('/posts', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return res.data;
+};
+
+export const togglePostLike = async (postId) => {
+  const res = await apiClient.post(`/posts/${postId}/like`);
+  return res.data;
+};
+
+export const loginUser = async (mobileNumber, password) => {
+  const res = await apiClient.post('/auth/login', { mobileNumber, password });
+  return res.data;
+};
+
+export const registerUser = async (userData) => {
+  const res = await apiClient.post('/auth/register', userData);
+  return res.data;
+};

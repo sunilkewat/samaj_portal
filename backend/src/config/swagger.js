@@ -272,21 +272,39 @@ const swaggerDocument = {
       },
       post: {
         tags: ['Social Feed & Posts'],
-        summary: 'Create community post',
+        summary: 'Create community post with media & YouTube URL (Requires Login)',
         requestBody: {
           content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  content: { type: 'string', example: 'जय समाज! आगामी सम्मेलन का वीडियो संदेश देखें।' },
+                  youtubeUrl: { type: 'string', example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+                  visibility: { type: 'string', enum: ['PUBLIC', 'MEMBERS_ONLY'], default: 'PUBLIC' },
+                  isPinned: { type: 'boolean', default: false },
+                  media: {
+                    type: 'array',
+                    items: { type: 'string', format: 'binary' },
+                    description: 'Upload images (JPG/PNG/WEBP), videos (MP4/WEBM), or PDF documents',
+                  },
+                },
+              },
+            },
             'application/json': {
               schema: {
                 type: 'object',
                 properties: {
                   content: { type: 'string', example: 'जय समाज! आगामी सम्मेलन की रूपरेखा तैयार है।' },
+                  youtubeUrl: { type: 'string', example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+                  visibility: { type: 'string', enum: ['PUBLIC', 'MEMBERS_ONLY'], default: 'PUBLIC' },
                   isPinned: { type: 'boolean', default: false },
                 },
               },
             },
           },
         },
-        responses: { 201: { description: 'Post created' } },
+        responses: { 201: { description: 'Post created successfully' } },
       },
     },
     '/posts/{id}/like': {

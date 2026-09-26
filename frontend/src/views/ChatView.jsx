@@ -105,7 +105,7 @@ export default function ChatView({ onNotification }) {
   }, [activeGroupId]);
 
   const loadMessagesForGroup = async (groupId) => {
-    if (!groupId) return;
+    if (!groupId || !isLoggedIn) return;
     try {
       const res = await fetchGroupMessages(groupId);
       if (res && res.data) {
@@ -135,7 +135,7 @@ export default function ChatView({ onNotification }) {
 
   // Load all members and multiple admins of a group
   const loadGroupMembers = async (groupId) => {
-    if (!groupId) return;
+    if (!groupId || !isLoggedIn) return;
     setIsLoadingMembers(true);
     try {
       const res = await fetchGroupMembers(groupId);
@@ -151,6 +151,7 @@ export default function ChatView({ onNotification }) {
 
   // Refresh groups to keep roles in sync
   const refreshGroups = () => {
+    if (!isLoggedIn) return;
     fetchGroups()
       .then((res) => {
         if (res && res.data && res.data.length > 0) {
@@ -172,6 +173,7 @@ export default function ChatView({ onNotification }) {
 
   // Load groups from backend API
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchGroups()
       .then((res) => {
         if (res && res.data && res.data.length > 0) {
@@ -197,20 +199,21 @@ export default function ChatView({ onNotification }) {
       .catch((err) => {
         console.warn('Groups API using mock data:', err.message);
       });
-  }, []);
+  }, [isLoggedIn]);
 
   // Sync messages continuously every 2.5s or when active group / user changes
   useEffect(() => {
-    if (!activeGroupId) return;
+    if (!activeGroupId || !isLoggedIn) return;
     loadMessagesForGroup(activeGroupId);
     const interval = setInterval(() => {
       loadMessagesForGroup(activeGroupId);
     }, 2500);
     return () => clearInterval(interval);
-  }, [activeGroupId, currentUser]);
+  }, [activeGroupId, currentUser, isLoggedIn]);
 
   // Initialize Socket.IO connection
   useEffect(() => {
+    if (!isLoggedIn) return;
     try {
       const serverUrl = 'https://samaj-portal-api.onrender.com';
       const socket = io(`${serverUrl}/chat`, {
@@ -246,7 +249,7 @@ export default function ChatView({ onNotification }) {
     } catch (e) {
       console.warn('Socket.IO connection skipped:', e.message);
     }
-  }, [currentUser, activeGroupId]);
+  }, [currentUser, activeGroupId, isLoggedIn]);
 
   // Handle Switching Groups
   const handleSelectGroup = (groupId) => {
@@ -487,10 +490,10 @@ export default function ChatView({ onNotification }) {
 
   // Load group members whenever active group changes
   useEffect(() => {
-    if (targetGroupId) {
+    if (targetGroupId && isLoggedIn) {
       loadGroupMembers(targetGroupId);
     }
-  }, [targetGroupId]);
+  }, [targetGroupId, isLoggedIn]);
 
   const activeMessages = (activeGroup && messages[activeGroup.id]) || [];
 
@@ -513,6 +516,185 @@ export default function ChatView({ onNotification }) {
       (m?.gotra || '').includes(memberSearch || '') ||
       (m?.city || '').toLowerCase().includes((memberSearch || '').toLowerCase())
   );
+
+  // If user is not logged in, show beautiful locked screen ensuring chat privacy
+  if (!isLoggedIn) {
+    return (
+      <Box sx={{ py: { xs: 2, md: 3 } }}>
+        {/* Title Header */}
+        <Box sx={{ mb: 4, textAlign: 'center' }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a', mb: 0.5 }}>
+            💬 समाज चौपाल व ग्रुप चर्चा (Community Chat)
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#64748b' }}>
+            स्वजातीय बंधुओं के साथ लाइव चर्चा, विचार-विमर्श, फोटो/वीडियो व मीडिया साझा करने का सीधा मंच
+          </Typography>
+        </Box>
+
+        {/* Security / Login Lock Card */}
+        <Card
+          sx={{
+            maxWidth: 680,
+            mx: 'auto',
+            borderRadius: 4,
+            boxShadow: '0 16px 40px rgba(15, 23, 42, 0.08)',
+            border: '1px solid #fed7aa',
+            background: 'linear-gradient(180deg, #fffbeb 0%, #ffffff 100%)',
+            p: { xs: 3, sm: 5 },
+            textAlign: 'center',
+          }}
+        >
+          <Box
+            sx={{
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              bgcolor: '#ffedd5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 2.5,
+              boxShadow: '0 8px 20px rgba(234, 88, 12, 0.18)',
+            }}
+          >
+            <LockIcon sx={{ fontSize: 44, color: '#ea580c' }} />
+          </Box>
+
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#9a3412', mb: 1.5 }}>
+            समाज चौपाल केवल पंजीकृत सदस्यों के लिए सुरक्षित है
+          </Typography>
+
+          <Typography variant="body1" sx={{ color: '#475569', mb: 3.5, lineHeight: 1.7, maxWidth: 540, mx: 'auto' }}>
+            स्वजातीय बंधुओं की आपसी बातचीत, परिवारिक संदेश व विभिन्न प्रकोष्ठों (युवा, शिक्षा, महिला) के ग्रुप्स की गोपनीयता बनाए रखने हेतु चैट केवल <strong>लॉगिन किए हुए सदस्यों</strong> के लिए ही उपलब्ध है।
+          </Typography>
+
+          {/* Feature Highlights Grid */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+              gap: 2,
+              mb: 4,
+              textAlign: 'left',
+            }}
+          >
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: 2.5,
+                bgcolor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1.5,
+              }}
+            >
+              <ShieldIcon sx={{ color: '#16a34a', fontSize: 24, mt: 0.2 }} />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                  100% सुरक्षित
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  केवल समाज बंधुओं के लिए निजी संवाद
+                </Typography>
+              </Box>
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: 2.5,
+                bgcolor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1.5,
+              }}
+            >
+              <GroupIcon sx={{ color: '#0284c7', fontSize: 24, mt: 0.2 }} />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                  प्रकोष्ठ ग्रुप्स
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  शिक्षा, युवा व सामाजिक समूह
+                </Typography>
+              </Box>
+            </Paper>
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: 2.5,
+                bgcolor: '#ffffff',
+                border: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1.5,
+              }}
+            >
+              <ChatIcon sx={{ color: '#ea580c', fontSize: 24, mt: 0.2 }} />
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e293b' }}>
+                  लाइव चर्चा
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b' }}>
+                  फ़ोटो, वीडियो व ऑडियो शेयरिंग
+                </Typography>
+              </Box>
+            </Paper>
+          </Box>
+
+          <Divider sx={{ mb: 3.5 }} />
+
+          {/* Action Buttons */}
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => openAuth('login')}
+              sx={{
+                bgcolor: '#ea580c',
+                '&:hover': { bgcolor: '#c2410c' },
+                fontWeight: 700,
+                px: 4,
+                py: 1.3,
+                borderRadius: 2.5,
+                fontSize: '1rem',
+                boxShadow: '0 4px 14px rgba(234, 88, 12, 0.35)',
+              }}
+            >
+              🔐 लॉगिन करें (Login Now)
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={() => openAuth('register')}
+              sx={{
+                color: '#ea580c',
+                borderColor: '#ea580c',
+                '&:hover': { borderColor: '#c2410c', bgcolor: '#fff7ed' },
+                fontWeight: 700,
+                px: 3.5,
+                py: 1.3,
+                borderRadius: 2.5,
+                fontSize: '1rem',
+              }}
+            >
+              ✨ नया पंजीकरण (Register)
+            </Button>
+          </Box>
+          <Typography variant="caption" sx={{ display: 'block', mt: 2.5, color: '#94a3b8' }}>
+            यदि आपका खाता पहले से नहीं है, तो मात्र 1 मिनट में निःशुल्क पंजीकरण कर सकते हैं।
+          </Typography>
+        </Card>
+      </Box>
+    );
+  }
 
   return (
     <Box>

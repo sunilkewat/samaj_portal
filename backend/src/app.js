@@ -31,6 +31,7 @@ app.get('/health', (req, res) => {
 const authRoutes = require('./modules/auth/auth.routes');
 const profileRoutes = require('./modules/profiles/profile.routes');
 const directoryRoutes = require('./modules/directory/directory.routes');
+const postRoutes = require('./modules/posts/posts.routes');
 
 // API Routes Mounting Point
 const API_PREFIX = process.env.API_PREFIX || '/api/v1';
@@ -38,6 +39,7 @@ const API_PREFIX = process.env.API_PREFIX || '/api/v1';
 app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/profiles`, profileRoutes);
 app.use(`${API_PREFIX}/directory`, directoryRoutes);
+app.use(`${API_PREFIX}/posts`, postRoutes);
 
 app.get(`${API_PREFIX}`, (req, res) => {
   res.json({

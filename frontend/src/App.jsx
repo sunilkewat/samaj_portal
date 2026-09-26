@@ -90,7 +90,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [cityFilter, setCityFilter] = useState('ALL');
   const [bloodFilter, setBloodFilter] = useState('ALL');
-  const [candles, setCandles] = useState({ mem1: 142, mem2: 89 });
   const [likedPosts, setLikedPosts] = useState({});
   const [interestsSent, setInterestsSent] = useState({});
   const [authModal, setAuthModal] = useState(false);
@@ -106,11 +105,6 @@ export default function App() {
       }
     });
   }, []);
-
-  const handleLightCandle = (id) => {
-    setCandles((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-    setNotification('श्रद्धांजलि अर्पित की गई (दीपक प्रज्ज्वलित हुआ) 🙏');
-  };
 
   const handleToggleLike = (id) => {
     setLikedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -208,7 +202,6 @@ export default function App() {
               <Tab label="👥 सदस्य डायरेक्टरी" />
               <Tab label="💍 वैवाहिक रिश्ते (Matrimonial)" />
               <Tab label="🩸 रक्तदान केंद्र (Blood SOS)" />
-              <Tab label="🕯️ श्रद्धांजलि (Memorial)" />
               <Tab label="📅 आगामी कार्यक्रम" />
             </Tabs>
           </Box>
@@ -505,83 +498,8 @@ export default function App() {
           </Box>
         )}
 
-        {/* TAB 4: MEMORIAL */}
+        {/* TAB 4: EVENTS */}
         {activeTab === 4 && (
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-              श्रद्धांजलि व पुण्य स्मरण (Memorial)
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#64748b', mb: 3 }}>
-              परम शांति प्राप्त हमारे पूज्य स्वजनों के प्रति विनम्र श्रद्धांजलि
-            </Typography>
-
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Card sx={{ p: 2, borderTop: '4px solid #334155' }}>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Avatar
-                      variant="rounded"
-                      src="https://images.unsplash.com/photo-1544717305-2782549b5136?w=400&auto=format&fit=crop&q=60"
-                      sx={{ width: 100, height: 110 }}
-                    />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        स्व. श्री रामप्रसाद जी केवट
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 1 }}>
-                        स्वर्गवास: 12 मार्च 2026 • आयु 78 वर्ष (इंदौर)
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#334155', mb: 2 }}>
-                        "आपका सरल स्वभाव, समाज के प्रति निष्ठा और मार्गदर्शन सदैव हमारे दिलों में जीवित रहेगा।"
-                      </Typography>
-                      <Button
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<CandleIcon />}
-                        onClick={() => handleLightCandle('mem1')}
-                      >
-                        दीपक जलाएं ({candles.mem1} अर्पित)
-                      </Button>
-                    </Box>
-                  </Box>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Card sx={{ p: 2, borderTop: '4px solid #334155' }}>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Avatar
-                      variant="rounded"
-                      src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&auto=format&fit=crop&q=60"
-                      sx={{ width: 100, height: 110 }}
-                    />
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        स्व. श्री बाबूलाल जी केवट
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mb: 1 }}>
-                        स्वर्गवास: 04 जनवरी 2026 • आयु 69 वर्ष (भोपाल)
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#334155', mb: 2 }}>
-                        "प्रभु उनकी पुण्य आत्मा को मोक्ष और परिवार को संबल प्रदान करें।"
-                      </Typography>
-                      <Button
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<CandleIcon />}
-                        onClick={() => handleLightCandle('mem2')}
-                      >
-                        दीपक जलाएं ({candles.mem2} अर्पित)
-                      </Button>
-                    </Box>
-                  </Box>
-                </Card>
-              </Grid>
-            </Grid>
-          </Box>
-        )}
-
-        {/* TAB 5: EVENTS */}
-        {activeTab === 5 && (
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>
               आगामी सामाजिक कार्यक्रम व सम्मेलन

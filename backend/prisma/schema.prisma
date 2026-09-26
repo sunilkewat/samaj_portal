@@ -146,8 +146,6 @@ model User {
   groupMemberships   GroupMember[]
   groupMessages      GroupMessage[]
   groupMessageReads  GroupMessageRead[]
-  memorials          Memorial[]
-  memorialTributes   MemorialTribute[]
   matrimonialProfile MatrimonialProfile?
   sentInterests      MatrimonialInterest[]  @relation("SentInterests")
   receivedInterests  MatrimonialInterest[]  @relation("ReceivedInterests")
@@ -518,62 +516,7 @@ model GroupMessageRead {
 }
 
 // -----------------------------------------------------------------------------
-// 5. MEMORIALS / SHOK SAMACHAR & TRIBUTES
-// -----------------------------------------------------------------------------
-
-model Memorial {
-  id            String    @id @default(uuid()) @db.Uuid
-  createdById   String    @db.Uuid
-  fullName      String    @db.VarChar(150)
-  gender        Gender
-  dateOfBirth   DateTime? @db.Date
-  dateOfDeath   DateTime  @db.Date
-  nativeVillage String?   @db.VarChar(100)
-  biography     String?   @db.Text
-  familyDetails String?   @db.Text
-  isApproved    Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
-  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  photos    MemorialPhoto[]
-  tributes  MemorialTribute[]
-
-  @@index([dateOfDeath(sort: Desc)])
-  @@index([isApproved])
-  @@map("memorials")
-}
-
-model MemorialPhoto {
-  id         String   @id @default(uuid()) @db.Uuid
-  memorialId String   @db.Uuid
-  photoUrl   String   @db.Text
-  caption    String?  @db.VarChar(200)
-  createdAt  DateTime @default(now())
-
-  memorial Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
-
-  @@map("memorial_photos")
-}
-
-model MemorialTribute {
-  id          String   @id @default(uuid()) @db.Uuid
-  memorialId  String   @db.Uuid
-  userId      String   @db.Uuid
-  message     String   @db.Text
-  isCandleLit Boolean  @default(true)
-  createdAt   DateTime @default(now())
-
-  memorial Memorial @relation(fields: [memorialId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([memorialId])
-  @@map("memorial_tributes")
-}
-
-// -----------------------------------------------------------------------------
-// 6. MATRIMONIAL PORTAL (RISHTEY)
+// 5. MATRIMONIAL PORTAL (RISHTEY)
 // -----------------------------------------------------------------------------
 
 model MatrimonialProfile {

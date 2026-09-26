@@ -33,7 +33,6 @@ const profileRoutes = require('./modules/profiles/profile.routes');
 const directoryRoutes = require('./modules/directory/directory.routes');
 const postRoutes = require('./modules/posts/posts.routes');
 const matrimonialRoutes = require('./modules/matrimonial/matrimonial.routes');
-const memorialRoutes = require('./modules/memorials/memorials.routes');
 const bloodBankRoutes = require('./modules/blood-bank/bloodBank.routes');
 const eventRoutes = require('./modules/events/events.routes');
 const groupRoutes = require('./modules/groups/groups.routes');
@@ -47,7 +46,6 @@ app.use(`${API_PREFIX}/profiles`, profileRoutes);
 app.use(`${API_PREFIX}/directory`, directoryRoutes);
 app.use(`${API_PREFIX}/posts`, postRoutes);
 app.use(`${API_PREFIX}/matrimonial`, matrimonialRoutes);
-app.use(`${API_PREFIX}/memorials`, memorialRoutes);
 app.use(`${API_PREFIX}/blood-bank`, bloodBankRoutes);
 app.use(`${API_PREFIX}/events`, eventRoutes);
 app.use(`${API_PREFIX}/groups`, groupRoutes);
@@ -65,7 +63,6 @@ app.get(`${API_PREFIX}`, (req, res) => {
       posts: `${API_PREFIX}/posts`,
       groups: `${API_PREFIX}/groups`,
       matrimonial: `${API_PREFIX}/matrimonial`,
-      memorials: `${API_PREFIX}/memorials`,
       events: `${API_PREFIX}/events`,
       bloodBank: `${API_PREFIX}/blood-bank`,
       donations: `${API_PREFIX}/donations`,

@@ -12,14 +12,12 @@ class AdminService {
       totalPosts,
       totalMatrimonial,
       totalBloodDonors,
-      totalMemorials,
     ] = await Promise.all([
       prisma.user.count({ where: { deletedAt: null } }),
       prisma.user.count({ where: { verificationStatus: 'PENDING', deletedAt: null } }),
       prisma.post.count({ where: { deletedAt: null } }),
       prisma.matrimonialProfile.count({ where: { deletedAt: null } }),
       prisma.bloodDonor.count({ where: { isAvailable: true } }),
-      prisma.memorial.count({ where: { deletedAt: null } }),
     ]);
 
     return {
@@ -28,7 +26,6 @@ class AdminService {
       totalPosts,
       totalMatrimonial,
       totalBloodDonors,
-      totalMemorials,
     };
   }
 

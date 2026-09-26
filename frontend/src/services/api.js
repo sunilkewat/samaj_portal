@@ -92,3 +92,13 @@ export const addGroupMember = async (groupId, userId, role = 'MEMBER') => {
   const res = await apiClient.post(`/groups/${groupId}/members`, { userId, role });
   return res.data;
 };
+
+export const fetchGroupMembers = async (groupId) => {
+  const res = await apiClient.get(`/groups/${groupId}/members`);
+  return res.data;
+};
+
+export const updateMemberRole = async (groupId, userId, role) => {
+  const res = await apiClient.patch(`/groups/${groupId}/members/${userId}/role`, { role });
+  return res.data;
+};

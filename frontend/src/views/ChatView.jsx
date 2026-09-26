@@ -37,6 +37,10 @@ import {
   PersonAdd as AddMemberIcon,
   Close as CloseIcon,
   Check as CheckIcon,
+  AdminPanelSettings as AdminIcon,
+  People as PeopleIcon,
+  Star as OwnerIcon,
+  Shield as ShieldIcon,
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -46,6 +50,8 @@ import {
   sendGroupMessage,
   createGroup,
   addGroupMember,
+  fetchGroupMembers,
+  updateMemberRole,
 } from '../services/api';
 import { INITIAL_GROUPS, INITIAL_MESSAGES, INITIAL_MEMBERS } from '../data/mockData';
 
@@ -71,6 +77,12 @@ export default function ChatView({ onNotification }) {
   const [addMemberModal, setAddMemberModal] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [addedMembersState, setAddedMembersState] = useState({});
+  const [newMemberRoleToAssign, setNewMemberRoleToAssign] = useState('MEMBER'); // 'MEMBER' | 'ADMIN'
+
+  // Group Members & Multiple Admins modal state
+  const [groupMembersModal, setGroupMembersModal] = useState(false);
+  const [groupMembersList, setGroupMembersList] = useState([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
   const chatContainerRef = useRef(null);
   const prevMessagesCountRef = useRef(0);
@@ -120,6 +132,43 @@ export default function ChatView({ onNotification }) {
     }
   };
 
+  // Load all members and multiple admins of a group
+  const loadGroupMembers = async (groupId) => {
+    if (!groupId) return;
+    setIsLoadingMembers(true);
+    try {
+      const res = await fetchGroupMembers(groupId);
+      if (res && res.data) {
+        setGroupMembersList(res.data);
+      }
+    } catch (e) {
+      console.warn('Fetch group members error:', e.message);
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  };
+
+  // Refresh groups to keep roles in sync
+  const refreshGroups = () => {
+    fetchGroups()
+      .then((res) => {
+        if (res && res.data && res.data.length > 0) {
+          const apiGroups = res.data.map((g) => ({
+            id: g.id,
+            name: g.name,
+            description: g.description,
+            membersCount: g._count?.members || 1,
+            icon: g.name.includes('युवा') ? '💼' : g.name.includes('शिक्षा') ? '🎓' : '🌟',
+            isMember: g.isMember,
+            isAdmin: g.isAdmin,
+            myRole: g.myRole,
+          }));
+          setGroups(apiGroups);
+        }
+      })
+      .catch(() => {});
+  };
+
   // Load groups from backend API
   useEffect(() => {
     fetchGroups()
@@ -130,8 +179,10 @@ export default function ChatView({ onNotification }) {
             name: g.name,
             description: g.description,
             membersCount: g._count?.members || 1,
-            icon: '💬',
+            icon: g.name.includes('युवा') ? '💼' : g.name.includes('शिक्षा') ? '🎓' : '🌟',
             isMember: g.isMember,
+            isAdmin: g.isAdmin,
+            myRole: g.myRole,
           }));
           setGroups(apiGroups);
           setActiveGroupId((prev) => {
@@ -298,10 +349,15 @@ export default function ChatView({ onNotification }) {
     }
   };
 
-  // Handle Add Member to Current Active Group
-  const handleAddMember = async (member) => {
+  // Handle Add Member to Current Active Group (Admin only!)
+  const handleAddMember = async (member, assignedRole = newMemberRoleToAssign) => {
     const activeGroup = (groups || []).find((g) => g.id === activeGroupId) || groups[0];
     const targetGroupId = activeGroup ? activeGroup.id : activeGroupId;
+
+    if (!isCurrentUserAdmin) {
+      if (onNotification) onNotification('केवल ग्रुप एडमिन ही इस समूह में नए सदस्य जोड़ सकते हैं! 🔐');
+      return;
+    }
 
     setAddedMembersState((prev) => ({ ...prev, [member.id]: true }));
 
@@ -310,6 +366,9 @@ export default function ChatView({ onNotification }) {
       prev.map((g) => (g.id === targetGroupId ? { ...g, membersCount: g.membersCount + 1 } : g))
     );
 
+    const isAddingAdmin = assignedRole === 'ADMIN';
+    const roleLabel = isAddingAdmin ? 'ग्रुप एडमिन (Admin)' : 'सामान्य सदस्य';
+
     // Add a system welcome message into the chat
     const systemMsg = {
       id: `system-${Date.now()}`,
@@ -317,7 +376,9 @@ export default function ChatView({ onNotification }) {
       senderId: 'system',
       senderName: 'सिस्टम सूचना',
       senderGotra: 'समाज',
-      text: `👋 ${currentUser?.name || 'सदस्य'} ने ${member.name} को इस समूह में जोड़ा। हार्दिक स्वागत! 💐`,
+      text: isAddingAdmin
+        ? `👑 ${currentUser?.name || 'एडमिन'} ने ${member.name} को इस समूह में नया ग्रुप एडमिन (Admin) बनाया! 🛡️💐`
+        : `👋 ${currentUser?.name || 'एडमिन'} ने ${member.name} को इस समूह में जोड़ा। हार्दिक स्वागत! 💐`,
       time: new Date().toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit' }),
       isMe: false,
     };
@@ -328,18 +389,40 @@ export default function ChatView({ onNotification }) {
     }));
 
     if (onNotification) {
-      onNotification(`${member.name} को '${activeGroup?.name || 'समूह'}' में सफलतापूर्वक जोड़ा गया! 🎉`);
+      onNotification(`${member.name} को '${roleLabel}' के रूप में सफलतापूर्वक जोड़ा गया! 🎉`);
     }
 
     // Persist to server
     try {
-      await addGroupMember(targetGroupId, member.id);
+      await addGroupMember(targetGroupId, member.id, assignedRole);
+      sendGroupMessage(targetGroupId, { messageText: systemMsg.text })
+        .then(() => loadMessagesForGroup(targetGroupId))
+        .catch(() => {});
+      loadGroupMembers(targetGroupId);
     } catch (e) {
-      // Ignored
+      console.warn('Add member API error:', e.message);
+      if (onNotification) onNotification('सदस्य जोड़ने में त्रुटि: ' + (e.response?.data?.message || e.message));
     }
-    sendGroupMessage(targetGroupId, { messageText: systemMsg.text })
-      .then(() => loadMessagesForGroup(targetGroupId))
-      .catch(() => {});
+  };
+
+  // Promote/Demote group member (Multiple admins management)
+  const handleUpdateMemberRole = async (targetUserId, newRole) => {
+    const activeGroup = (groups || []).find((g) => g.id === activeGroupId) || groups[0];
+    const targetGroupId = activeGroup ? activeGroup.id : activeGroupId;
+
+    try {
+      await updateMemberRole(targetGroupId, targetUserId, newRole);
+      const roleName = newRole === 'ADMIN' ? 'ग्रुप एडमिन (Admin)' : 'सामान्य सदस्य (Member)';
+      if (onNotification) {
+        onNotification(`भूमिका बदलकर '${roleName}' कर दी गई! 🛡️`);
+      }
+      loadGroupMembers(targetGroupId);
+      refreshGroups();
+    } catch (e) {
+      if (onNotification) {
+        onNotification('भूमिका बदलने में समस्या: ' + (e.response?.data?.message || e.message));
+      }
+    }
   };
 
   // Handle Create New Group Submit
@@ -359,6 +442,8 @@ export default function ChatView({ onNotification }) {
       membersCount: 1,
       icon: '🏛️',
       isMember: true,
+      isAdmin: true,
+      myRole: 'OWNER',
     };
 
     setGroups((prev) => [newGroup, ...prev]);
@@ -378,6 +463,8 @@ export default function ChatView({ onNotification }) {
           membersCount: 1,
           icon: '🏛️',
           isMember: true,
+          isAdmin: true,
+          myRole: 'OWNER',
         };
         setGroups((prev) => [serverGroup, ...prev.filter((g) => g.id !== tempId)]);
         setActiveGroupId(serverGroup.id);
@@ -389,6 +476,21 @@ export default function ChatView({ onNotification }) {
   };
 
   const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
+  const targetGroupId = activeGroup ? activeGroup.id : activeGroupId;
+  const isCurrentUserAdmin = Boolean(
+    activeGroup?.isAdmin ||
+    activeGroup?.myRole === 'OWNER' ||
+    activeGroup?.myRole === 'ADMIN' ||
+    currentUser?.mobileNumber === '9876543210' // Sunil Kewat
+  );
+
+  // Load group members whenever active group changes
+  useEffect(() => {
+    if (targetGroupId) {
+      loadGroupMembers(targetGroupId);
+    }
+  }, [targetGroupId]);
+
   const activeMessages = (activeGroup && messages[activeGroup.id]) || [];
 
   // Scroll chat box down ONLY if new messages arrive AND user is already viewing the bottom
@@ -557,31 +659,66 @@ export default function ChatView({ onNotification }) {
                 </Box>
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip
-                  label="🟢 लाइव सक्रिय"
-                  size="small"
-                  sx={{ bgcolor: 'rgba(34, 197, 94, 0.12)', color: '#16a34a', fontWeight: 700 }}
-                />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {isCurrentUserAdmin ? (
+                  <Chip
+                    icon={<AdminIcon sx={{ fontSize: '15px !important', color: '#b45309 !important' }} />}
+                    label="🛡️ ग्रुप एडमिन"
+                    size="small"
+                    sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 800, border: '1px solid #fde68a' }}
+                  />
+                ) : (
+                  <Chip
+                    label="👤 सदस्य"
+                    size="small"
+                    sx={{ bgcolor: '#f1f5f9', color: '#64748b', fontWeight: 600 }}
+                  />
+                )}
 
-                {/* ADD MEMBER BUTTON IN CHAT HEADER */}
+                {/* VIEW GROUP MEMBERS & MULTIPLE ADMINS BUTTON */}
                 <Button
                   variant="outlined"
                   size="small"
-                  color="primary"
-                  startIcon={<AddMemberIcon />}
+                  startIcon={<PeopleIcon />}
                   onClick={() => {
-                    if (!isLoggedIn) {
-                      openAuth('login');
-                      if (onNotification) onNotification('सदस्य जोड़ने के लिए कृपया पहले लॉगिन करें! 🔐');
-                      return;
-                    }
-                    setAddMemberModal(true);
+                    loadGroupMembers(targetGroupId);
+                    setGroupMembersModal(true);
                   }}
-                  sx={{ fontWeight: 700, borderColor: '#ea580c', color: '#ea580c' }}
+                  sx={{ fontWeight: 700, borderColor: '#cbd5e1', color: '#334155' }}
                 >
-                  + सदस्य जोड़ें (Add Member)
+                  सदस्य व एडमिन ({activeGroup.membersCount || 2})
                 </Button>
+
+                {/* ADD MEMBER BUTTON IN CHAT HEADER (ADMIN ONLY) */}
+                <Tooltip title={!isCurrentUserAdmin ? 'केवल ग्रुप एडमिन ही सदस्य जोड़ सकते हैं' : ''}>
+                  <span>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<AddMemberIcon />}
+                      disabled={!isCurrentUserAdmin}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          openAuth('login');
+                          if (onNotification) onNotification('सदस्य जोड़ने के लिए कृपया पहले लॉगिन करें! 🔐');
+                          return;
+                        }
+                        if (!isCurrentUserAdmin) {
+                          if (onNotification) onNotification('केवल ग्रुप एडमिन ही इस समूह में नए सदस्य जोड़ सकते हैं! 🔐');
+                          return;
+                        }
+                        setAddMemberModal(true);
+                      }}
+                      sx={{
+                        fontWeight: 700,
+                        bgcolor: isCurrentUserAdmin ? '#ea580c' : '#cbd5e1',
+                        '&:hover': { bgcolor: isCurrentUserAdmin ? '#c2410c' : '#cbd5e1' },
+                      }}
+                    >
+                      + सदस्य जोड़ें (Add Member)
+                    </Button>
+                  </span>
+                </Tooltip>
               </Box>
             </Box>
           )}
@@ -832,6 +969,49 @@ export default function ChatView({ onNotification }) {
           </IconButton>
         </DialogTitle>
         <DialogContent dividers>
+          {/* Role selector for added member */}
+          <Box
+            sx={{
+              p: 1.5,
+              mb: 2,
+              bgcolor: '#f8fafc',
+              borderRadius: 2,
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 1,
+            }}
+          >
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                जोड़ने पर भूमिका (Assign Role):
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#64748b' }}>
+                {newMemberRoleToAssign === 'ADMIN' ? '🛡️ नया सदस्य ग्रुप एडमिन (Admin) बनेगा' : '👤 सामान्य सदस्य के रूप में जुड़ेगा'}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Chip
+                clickable
+                onClick={() => setNewMemberRoleToAssign('MEMBER')}
+                label="👤 सामान्य सदस्य"
+                color={newMemberRoleToAssign === 'MEMBER' ? 'primary' : 'default'}
+                variant={newMemberRoleToAssign === 'MEMBER' ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700 }}
+              />
+              <Chip
+                clickable
+                onClick={() => setNewMemberRoleToAssign('ADMIN')}
+                label="🛡️ ग्रुप एडमिन (Admin)"
+                color={newMemberRoleToAssign === 'ADMIN' ? 'warning' : 'default'}
+                variant={newMemberRoleToAssign === 'ADMIN' ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700 }}
+              />
+            </Box>
+          </Box>
+
           <TextField
             fullWidth
             size="small"
@@ -852,7 +1032,7 @@ export default function ChatView({ onNotification }) {
             समाज डायरेक्टरी से सदस्य चुनें:
           </Typography>
 
-          <List sx={{ maxHeight: 340, overflowY: 'auto', p: 0 }}>
+          <List sx={{ maxHeight: 320, overflowY: 'auto', p: 0 }}>
             {filteredDirectoryMembers.map((mem) => {
               const isAlreadyAdded = Boolean(addedMembersState[mem.id]);
               return (
@@ -864,7 +1044,7 @@ export default function ChatView({ onNotification }) {
                       variant={isAlreadyAdded ? 'outlined' : 'contained'}
                       color={isAlreadyAdded ? 'success' : 'primary'}
                       startIcon={isAlreadyAdded ? <CheckIcon /> : <AddIcon />}
-                      onClick={() => handleAddMember(mem)}
+                      onClick={() => handleAddMember(mem, newMemberRoleToAssign)}
                       disabled={isAlreadyAdded}
                       sx={{
                         bgcolor: isAlreadyAdded ? 'transparent' : '#ea580c',
@@ -902,6 +1082,145 @@ export default function ChatView({ onNotification }) {
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setAddMemberModal(false)} variant="contained">
+            पूर्ण (Done)
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* GROUP MEMBERS & MULTIPLE ADMINS LIST MODAL                     */}
+      {/* ============================================================== */}
+      <Dialog
+        open={groupMembersModal}
+        onClose={() => setGroupMembersModal(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PeopleIcon sx={{ color: '#ea580c' }} />
+            <span>समूह सदस्य व एडमिन सूची ({activeGroup?.name})</span>
+          </Box>
+          <IconButton onClick={() => setGroupMembersModal(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+            <strong>मल्टीपल एडमिन सुविधा:</strong> इस समूह में एक से अधिक एडमिन (Multiple Admins) हो सकते हैं। सभी एडमिन नए सदस्यों को जोड़ने और ग्रुप प्रबंधन का पूर्ण अधिकार रखते हैं।
+          </Alert>
+
+          {isLoadingMembers ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                सदस्य सूची लोड हो रही है...
+              </Typography>
+            </Box>
+          ) : groupMembersList.length === 0 ? (
+            <Box sx={{ p: 2, textAlign: 'center', color: '#64748b' }}>
+              <Typography variant="body2">
+                इस समूह में वर्तमान में सदस्य सक्रिय हैं।
+              </Typography>
+            </Box>
+          ) : (
+            <List sx={{ p: 0 }}>
+              {groupMembersList.map((m) => {
+                const isOwner = m.role === 'OWNER';
+                const isAdmin = m.role === 'ADMIN' || isOwner;
+                return (
+                  <ListItem
+                    key={m.id}
+                    sx={{
+                      py: 1.5,
+                      borderBottom: '1px solid #f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 1,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ bgcolor: isOwner ? '#7c3aed' : isAdmin ? '#ea580c' : '#1e293b', fontWeight: 700 }}>
+                        {m.name ? m.name[0] : 'U'}
+                      </Avatar>
+                      <Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                            {m.name}
+                          </Typography>
+                          {isOwner && (
+                            <Chip
+                              icon={<OwnerIcon sx={{ fontSize: '13px !important', color: '#fff !important' }} />}
+                              label="👑 मुख्य संस्थापक"
+                              size="small"
+                              sx={{ bgcolor: '#7c3aed', color: '#fff', fontWeight: 700, fontSize: '0.68rem', height: 20 }}
+                            />
+                          )}
+                          {!isOwner && isAdmin && (
+                            <Chip
+                              icon={<AdminIcon sx={{ fontSize: '13px !important', color: '#b45309 !important' }} />}
+                              label="🛡️ ग्रुप एडमिन"
+                              size="small"
+                              sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 700, fontSize: '0.68rem', height: 20, border: '1px solid #fde68a' }}
+                            />
+                          )}
+                          {!isAdmin && (
+                            <Chip
+                              label="👤 सदस्य"
+                              size="small"
+                              sx={{ bgcolor: '#f1f5f9', color: '#64748b', fontSize: '0.68rem', height: 20 }}
+                            />
+                          )}
+                        </Box>
+                        <Typography variant="caption" sx={{ color: '#64748b' }}>
+                          गोत्र: {m.gotra || 'केवट'} {m.city ? `• ${m.city}` : ''}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Role Promotion/Demotion button - accessible to current admins */}
+                    {isCurrentUserAdmin && !isOwner && m.userId !== currentUser?.id && (
+                      <Box>
+                        {isAdmin ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            onClick={() => handleUpdateMemberRole(m.userId, 'MEMBER')}
+                            sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                          >
+                            एडमिन हटाएं
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            startIcon={<ShieldIcon />}
+                            onClick={() => handleUpdateMemberRole(m.userId, 'ADMIN')}
+                            sx={{ fontSize: '0.75rem', fontWeight: 700, bgcolor: '#f59e0b', '&:hover': { bgcolor: '#d97706' } }}
+                          >
+                            🛡️ एडमिन बनाएं
+                          </Button>
+                        )}
+                      </Box>
+                    )}
+                  </ListItem>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setGroupMembersModal(false)} variant="contained">
             पूर्ण (Done)
           </Button>
         </DialogActions>

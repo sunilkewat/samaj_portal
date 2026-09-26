@@ -52,11 +52,16 @@ class GroupsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return groups.map((g) => ({
-      ...g,
-      isMember: g.members.length > 0,
-      myRole: g.members[0]?.role || null,
-    }));
+    return groups.map((g) => {
+      const myRole = g.members[0]?.role || null;
+      const isCreator = userId && g.createdById === userId;
+      return {
+        ...g,
+        isMember: g.members.length > 0 || isCreator,
+        myRole: myRole || (isCreator ? 'OWNER' : null),
+        isAdmin: ['OWNER', 'ADMIN'].includes(myRole) || isCreator,
+      };
+    });
   }
 
   /**
@@ -81,12 +86,107 @@ class GroupsService {
   }
 
   /**
-   * Add a member to group
+   * Get all members and admins of a group
+   */
+  async getGroupMembers(groupId) {
+    if (!isUUID(groupId)) return [];
+    const members = await prisma.groupMember.findMany({
+      where: { groupId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            mobileNumber: true,
+            profile: {
+              select: {
+                firstName: true,
+                lastName: true,
+                samajGotra: true,
+                city: true,
+                profilePhoto: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [
+        { role: 'asc' }, // OWNER, ADMIN, MODERATOR, MEMBER
+        { joinedAt: 'asc' },
+      ],
+    });
+
+    return members.map((m) => ({
+      id: m.id,
+      userId: m.userId,
+      role: m.role,
+      isAdmin: ['OWNER', 'ADMIN'].includes(m.role),
+      isOwner: m.role === 'OWNER',
+      name: m.user?.profile
+        ? `${m.user.profile.firstName || ''} ${m.user.profile.lastName || ''}`.trim()
+        : 'सदस्य',
+      gotra: m.user?.profile?.samajGotra || 'केवट',
+      city: m.user?.profile?.city || '',
+      photo: m.user?.profile?.profilePhoto || null,
+      joinedAt: m.joinedAt,
+    }));
+  }
+
+  /**
+   * Update member role (e.g. promote member to ADMIN or demote to MEMBER)
+   * Only group OWNER or ADMIN can perform this action!
+   */
+  async updateMemberRole(requesterId, groupId, targetUserId, newRole) {
+    if (!isUUID(groupId) || !isUUID(targetUserId)) throw new ApiError(400, 'Invalid ID format');
+    
+    const validRoles = ['OWNER', 'ADMIN', 'MODERATOR', 'MEMBER'];
+    if (!validRoles.includes(newRole)) {
+      throw new ApiError(400, 'Invalid role. Must be OWNER, ADMIN, MODERATOR, or MEMBER');
+    }
+
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) throw new ApiError(404, 'Group not found');
+
+    // Requester must be OWNER or ADMIN
+    const requester = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: requesterId } },
+    });
+    const isAuthorized = (requester && ['OWNER', 'ADMIN'].includes(requester.role)) || group.createdById === requesterId;
+    if (!isAuthorized) {
+      throw new ApiError(403, 'केवल ग्रुप एडमिन ही सदस्य की भूमिका बदल सकते हैं (Only group admins can change roles)');
+    }
+
+    const updated = await prisma.groupMember.update({
+      where: { groupId_userId: { groupId, userId: targetUserId } },
+      data: { role: newRole },
+      include: {
+        user: {
+          select: {
+            id: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Add a member to group (Only Group Admins/Owner can add members!)
    */
   async addMember(requesterId, groupId, targetUserId, role = 'MEMBER') {
     if (!isUUID(groupId)) throw new ApiError(400, 'Invalid group ID format');
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) throw new ApiError(404, 'Group not found');
+
+    // PERMISSION CHECK: Only OWNER or ADMIN can add members!
+    const requesterMembership = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: requesterId } },
+    });
+    const isGroupAdmin = (requesterMembership && ['OWNER', 'ADMIN'].includes(requesterMembership.role)) || group.createdById === requesterId;
+    if (!isGroupAdmin) {
+      throw new ApiError(403, 'केवल ग्रुप एडमिन ही इस समूह में नए सदस्य जोड़ सकते हैं (Only Group Admins can add members to this group)');
+    }
 
     if (!isUUID(targetUserId)) {
       return {

@@ -93,6 +93,27 @@ class GroupsController {
       next(error);
     }
   }
+
+  async getGroupMembers(req, res, next) {
+    try {
+      const { id } = req.params;
+      const members = await groupsService.getGroupMembers(id);
+      return res.status(200).json(new ApiResponse(200, members, 'Group members retrieved'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateMemberRole(req, res, next) {
+    try {
+      const { id, userId } = req.params;
+      const { role } = req.body;
+      const updated = await groupsService.updateMemberRole(req.user.id, id, userId, role);
+      return res.status(200).json(new ApiResponse(200, updated, 'Member role updated successfully'));
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new GroupsController();

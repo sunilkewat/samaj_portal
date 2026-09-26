@@ -23,6 +23,7 @@ import {
   ListItemText,
   Tooltip,
   Alert,
+  Badge,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -44,6 +45,9 @@ import {
   Shield as ShieldIcon,
   PersonRemove as RemoveMemberIcon,
   YouTube as YouTubeIcon,
+  Person as PersonIcon,
+  Call as CallIcon,
+  ChatBubble as ChatBubbleIcon,
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -59,16 +63,34 @@ import {
 } from '../services/api';
 import YouTubeEmbed from '../components/feed/YouTubeEmbed';
 import { extractYouTubeUrlFromText, getYouTubeEmbedUrl } from '../utils/youtube.util';
-import { INITIAL_GROUPS, INITIAL_MESSAGES, INITIAL_MEMBERS } from '../data/mockData';
+import {
+  INITIAL_GROUPS,
+  INITIAL_MESSAGES,
+  INITIAL_MEMBERS,
+  INITIAL_DIRECT_CHATS,
+  INITIAL_DIRECT_MESSAGES,
+} from '../data/mockData';
 
-export default function ChatView({ onNotification }) {
+export default function ChatView({ onNotification, directChatTarget, onClearDirectChatTarget }) {
   const { currentUser, isLoggedIn, openAuth } = useAuth();
 
+  // Mode: 'GROUPS' | 'DIRECT' (Like WhatsApp / Telegram)
+  const [chatMode, setChatMode] = useState('GROUPS');
+
+  // Groups state
   const [groups, setGroups] = useState(INITIAL_GROUPS);
   const [activeGroupId, setActiveGroupId] = useState('group-1');
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [messageInput, setMessageInput] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
+
+  // 1-to-1 Direct Personal Chats state (WhatsApp/Telegram style)
+  const [directChats, setDirectChats] = useState(INITIAL_DIRECT_CHATS);
+  const [activeDirectChatId, setActiveDirectChatId] = useState('dm-sapna-batham');
+  const [directMessages, setDirectMessages] = useState(INITIAL_DIRECT_MESSAGES);
+  const [directChatSearch, setDirectChatSearch] = useState('');
+  const [newDirectChatModal, setNewDirectChatModal] = useState(false);
+  const [directMemberSearch, setDirectMemberSearch] = useState('');
 
   // Media file attachment state in chat
   const [selectedChatMedia, setSelectedChatMedia] = useState(null);
@@ -105,10 +127,76 @@ export default function ChatView({ onNotification }) {
     }
   };
 
-  // Scroll chat on group change
+  // Scroll chat on group change, direct chat change, or mode switch
   useEffect(() => {
     scrollToBottom(true);
-  }, [activeGroupId]);
+  }, [activeGroupId, activeDirectChatId, chatMode]);
+
+  // Handle directChatTarget passed from Directory or other modules
+  useEffect(() => {
+    if (directChatTarget) {
+      setChatMode('DIRECT');
+      const existing = directChats.find(
+        (dc) => dc.targetUserId === directChatTarget.id || (dc.name && dc.name.includes(directChatTarget.name))
+      );
+      if (existing) {
+        setActiveDirectChatId(existing.id);
+      } else {
+        const newDmId = `dm-${directChatTarget.id || Date.now()}`;
+        const newDm = {
+          id: newDmId,
+          targetUserId: directChatTarget.id,
+          name: directChatTarget.name,
+          gotra: directChatTarget.gotra || 'कश्यप',
+          city: directChatTarget.city || 'Indore',
+          phone: directChatTarget.phone || '',
+          avatar: directChatTarget.name ? directChatTarget.name[0] : 'S',
+          avatarColor: '#ea580c',
+          online: true,
+          lastSeen: 'सक्रिय (Online)',
+          lastMessage: 'सीधी चैट शुरू हुई',
+          lastMessageTime: 'अभी',
+          unreadCount: 0,
+        };
+        setDirectChats((prev) => [newDm, ...prev]);
+        setActiveDirectChatId(newDmId);
+      }
+      if (onClearDirectChatTarget) onClearDirectChatTarget();
+    }
+  }, [directChatTarget]);
+
+  // Handler to start 1-to-1 direct chat with any member
+  const handleStartDirectChatWithMember = (member) => {
+    setChatMode('DIRECT');
+    const existing = directChats.find(
+      (dc) => dc.targetUserId === member.id || (dc.name && dc.name.includes(member.name))
+    );
+    if (existing) {
+      setActiveDirectChatId(existing.id);
+    } else {
+      const newDmId = `dm-${member.id || Date.now()}`;
+      const newDm = {
+        id: newDmId,
+        targetUserId: member.id,
+        name: member.name,
+        gotra: member.gotra || 'कश्यप',
+        city: member.city || 'Indore',
+        phone: member.phone || '',
+        avatar: member.name ? member.name[0] : 'S',
+        avatarColor: '#ea580c',
+        online: true,
+        lastSeen: 'सक्रिय (Online)',
+        lastMessage: 'सीधी चैट शुरू हुई',
+        lastMessageTime: 'अभी',
+        unreadCount: 0,
+      };
+      setDirectChats((prev) => [newDm, ...prev]);
+      setActiveDirectChatId(newDmId);
+    }
+    setNewDirectChatModal(false);
+    setGroupMembersModal(false);
+    if (onNotification) onNotification(`${member.name} के साथ 1-to-1 चैट खुली! 💬`);
+  };
 
   const loadMessagesForGroup = async (groupId) => {
     if (!groupId || !isLoggedIn) return;
@@ -313,6 +401,58 @@ export default function ChatView({ onNotification }) {
       if (selectedChatMedia.type.startsWith('video/')) mediaType = 'VIDEO';
       else if (selectedChatMedia.type === 'application/pdf') mediaType = 'DOCUMENT';
       else mediaType = 'IMAGE';
+    }
+
+    // Handle 1-to-1 Direct Personal Messages (WhatsApp / Telegram style)
+    if (chatMode === 'DIRECT') {
+      const activeDm = directChats.find((dc) => dc.id === activeDirectChatId) || directChats[0];
+      const targetDmId = activeDm ? activeDm.id : activeDirectChatId;
+
+      const newDirectMsg = {
+        id: `dm-local-${Date.now()}`,
+        senderId: currentUser.id,
+        senderName: currentUser.name || 'सुनील केवट',
+        senderGotra: currentUser.gotra || 'कश्यप',
+        text: textToSend,
+        mediaUrl,
+        mediaType,
+        mediaName,
+        time: new Date().toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit' }),
+        isMe: true,
+      };
+
+      setDirectMessages((prev) => ({
+        ...prev,
+        [targetDmId]: [...(prev[targetDmId] || []), newDirectMsg],
+      }));
+
+      // Update contact preview snippet in conversation list
+      setDirectChats((prev) =>
+        prev.map((dc) =>
+          dc.id === targetDmId
+            ? {
+                ...dc,
+                lastMessage: textToSend || (mediaType === 'IMAGE' ? '📷 फोटो' : '📁 फ़ाइल'),
+                lastMessageTime: 'अभी',
+              }
+            : dc
+        )
+      );
+
+      // Emit via WebSocket
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('send_direct_message', {
+          targetDmId,
+          targetUserId: activeDm?.targetUserId,
+          message: newDirectMsg,
+        });
+      }
+
+      setMessageInput('');
+      setSelectedChatMedia(null);
+      if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
+      setTimeout(() => scrollToBottom(true), 50);
+      return;
     }
 
     const activeGroup = (groups || []).find((g) => g.id === activeGroupId) || groups[0];
@@ -571,7 +711,12 @@ export default function ChatView({ onNotification }) {
     }
   }, [targetGroupId, isLoggedIn]);
 
-  const activeMessages = (activeGroup && messages[activeGroup.id]) || [];
+  const activeDirectChat = directChats.find((dc) => dc.id === activeDirectChatId) || directChats[0];
+
+  const activeMessages =
+    chatMode === 'DIRECT'
+      ? (activeDirectChat && directMessages[activeDirectChat.id]) || []
+      : (activeGroup && messages[activeGroup.id]) || [];
 
   // Scroll chat box down ONLY if new messages arrive AND user is already viewing the bottom
   useEffect(() => {
@@ -586,11 +731,24 @@ export default function ChatView({ onNotification }) {
     (g?.name || '').toLowerCase().includes((groupSearch || '').toLowerCase())
   );
 
+  const filteredDirectChats = (directChats || []).filter((dc) =>
+    (dc?.name || '').toLowerCase().includes((directChatSearch || '').toLowerCase()) ||
+    (dc?.gotra || '').includes(directChatSearch || '') ||
+    (dc?.city || '').toLowerCase().includes((directChatSearch || '').toLowerCase())
+  );
+
   const filteredDirectoryMembers = (INITIAL_MEMBERS || []).filter(
     (m) =>
       (m?.name || '').toLowerCase().includes((memberSearch || '').toLowerCase()) ||
       (m?.gotra || '').includes(memberSearch || '') ||
       (m?.city || '').toLowerCase().includes((memberSearch || '').toLowerCase())
+  );
+
+  const filteredDirectSearchMembers = (INITIAL_MEMBERS || []).filter(
+    (m) =>
+      (m?.name || '').toLowerCase().includes((directMemberSearch || '').toLowerCase()) ||
+      (m?.gotra || '').includes(directMemberSearch || '') ||
+      (m?.city || '').toLowerCase().includes((directMemberSearch || '').toLowerCase())
   );
 
   // If user is not logged in, show beautiful locked screen ensuring chat privacy
@@ -785,22 +943,41 @@ export default function ChatView({ onNotification }) {
           </Typography>
         </Box>
 
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            if (!isLoggedIn) {
-              openAuth('login');
-              if (onNotification) onNotification('नया ग्रुप बनाने के लिए कृपया पहले लॉगिन करें! 🔐');
-              return;
-            }
-            setCreateGroupModal(true);
-          }}
-          sx={{ bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' }, fontWeight: 700 }}
-        >
-          नया चर्चा समूह बनाएं (New Group)
-        </Button>
+        {chatMode === 'GROUPS' ? (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              if (!isLoggedIn) {
+                openAuth('login');
+                if (onNotification) onNotification('नया ग्रुप बनाने के लिए कृपया पहले लॉगिन करें! 🔐');
+                return;
+              }
+              setCreateGroupModal(true);
+            }}
+            sx={{ bgcolor: '#ea580c', '&:hover': { bgcolor: '#c2410c' }, fontWeight: 700 }}
+          >
+            नया चर्चा समूह बनाएं (New Group)
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PersonIcon />}
+            onClick={() => {
+              if (!isLoggedIn) {
+                openAuth('login');
+                if (onNotification) onNotification('निजी चैट शुरू करने के लिए कृपया पहले लॉगिन करें! 🔐');
+                return;
+              }
+              setNewDirectChatModal(true);
+            }}
+            sx={{ bgcolor: '#0284c7', '&:hover': { bgcolor: '#0369a1' }, fontWeight: 700 }}
+          >
+            + नई व्यक्तिगत चैट (New Chat)
+          </Button>
+        )}
       </Box>
 
       {/* Main Chat Layout Container */}
@@ -815,7 +992,7 @@ export default function ChatView({ onNotification }) {
           height: { xs: 'auto', md: '660px' },
         }}
       >
-        {/* LEFT COLUMN: Groups List */}
+        {/* LEFT COLUMN: Groups / Direct Chats List */}
         <Box
           sx={{
             width: { xs: '100%', md: '340px' },
@@ -825,161 +1002,428 @@ export default function ChatView({ onNotification }) {
             flexDirection: 'column',
           }}
         >
-          {/* Group Search Bar */}
-          <Box sx={{ p: 2, borderBottom: '1px solid #f1f5f9' }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="ग्रुप खोजें (Search Groups)..."
-              value={groupSearch}
-              onChange={(e) => setGroupSearch(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
-                  </InputAdornment>
-                ),
+          {/* WhatsApp / Telegram style Segmented Mode Toggle */}
+          <Box sx={{ p: 1.5, borderBottom: '1px solid #e2e8f0', bgcolor: '#f8fafc' }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                p: 0.5,
+                bgcolor: '#e2e8f0',
+                borderRadius: 2,
+                gap: 0.5,
               }}
-            />
+            >
+              <Button
+                size="small"
+                onClick={() => setChatMode('GROUPS')}
+                startIcon={<GroupIcon sx={{ fontSize: 18 }} />}
+                sx={{
+                  py: 0.8,
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  borderRadius: 1.5,
+                  bgcolor: chatMode === 'GROUPS' ? '#ffffff' : 'transparent',
+                  color: chatMode === 'GROUPS' ? '#ea580c' : '#64748b',
+                  boxShadow: chatMode === 'GROUPS' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  '&:hover': {
+                    bgcolor: chatMode === 'GROUPS' ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                  },
+                }}
+              >
+                समूह ({groups.length})
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setChatMode('DIRECT')}
+                startIcon={<PersonIcon sx={{ fontSize: 18 }} />}
+                sx={{
+                  py: 0.8,
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  borderRadius: 1.5,
+                  bgcolor: chatMode === 'DIRECT' ? '#ffffff' : 'transparent',
+                  color: chatMode === 'DIRECT' ? '#0284c7' : '#64748b',
+                  boxShadow: chatMode === 'DIRECT' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+                  '&:hover': {
+                    bgcolor: chatMode === 'DIRECT' ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                  },
+                }}
+              >
+                1-to-1 चैट ({directChats.length})
+              </Button>
+            </Box>
           </Box>
 
-          {/* Groups List Items */}
+          {/* Search Bar depending on active chatMode */}
+          <Box sx={{ p: 1.5, borderBottom: '1px solid #f1f5f9' }}>
+            {chatMode === 'GROUPS' ? (
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="ग्रुप खोजें (Search Groups)..."
+                value={groupSearch}
+                onChange={(e) => setGroupSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            ) : (
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="नाम, गोत्र या शहर से खोजें..."
+                value={directChatSearch}
+                onChange={(e) => setDirectChatSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: '#94a3b8', fontSize: 20 }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            )}
+          </Box>
+
+          {/* Groups or Direct Chats List */}
           <List sx={{ flex: 1, overflowY: 'auto', p: 0 }}>
-            {filteredGroups.map((grp) => {
-              const isSelected = grp.id === activeGroupId;
-              return (
-                <ListItem key={grp.id} disablePadding>
-                  <ListItemButton
-                    selected={isSelected}
-                    onClick={() => handleSelectGroup(grp.id)}
-                    sx={{
-                      py: 1.5,
-                      px: 2,
-                      borderLeft: isSelected ? '4px solid #ea580c' : '4px solid transparent',
-                      bgcolor: isSelected ? 'rgba(234, 88, 12, 0.08) !important' : 'inherit',
-                      '&:hover': { bgcolor: '#f8fafc' },
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar
-                        sx={{
-                          bgcolor: isSelected ? '#ea580c' : '#f1f5f9',
-                          color: isSelected ? '#fff' : '#0f172a',
-                          fontWeight: 800,
-                        }}
-                      >
-                        {grp.icon || '💬'}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                          {grp.name}
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.3 }}>
-                          👥 {grp.membersCount} सदस्य • सक्रिय
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
+            {chatMode === 'GROUPS' ? (
+              filteredGroups.map((grp) => {
+                const isSelected = grp.id === activeGroupId;
+                return (
+                  <ListItem key={grp.id} disablePadding>
+                    <ListItemButton
+                      selected={isSelected}
+                      onClick={() => handleSelectGroup(grp.id)}
+                      sx={{
+                        py: 1.5,
+                        px: 2,
+                        borderLeft: isSelected ? '4px solid #ea580c' : '4px solid transparent',
+                        bgcolor: isSelected ? 'rgba(234, 88, 12, 0.08) !important' : 'inherit',
+                        '&:hover': { bgcolor: '#f8fafc' },
+                      }}
+                    >
+                      <ListItemAvatar>
+                        <Avatar
+                          sx={{
+                            bgcolor: isSelected ? '#ea580c' : '#f1f5f9',
+                            color: isSelected ? '#fff' : '#0f172a',
+                            fontWeight: 800,
+                          }}
+                        >
+                          {grp.icon || '💬'}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                            {grp.name}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.3 }}>
+                            👥 {grp.membersCount} सदस्य • सक्रिय
+                          </Typography>
+                        }
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })
+            ) : (
+              <>
+                {filteredDirectChats.length === 0 ? (
+                  <Box sx={{ p: 3, textAlign: 'center', color: '#94a3b8' }}>
+                    <Typography variant="body2" sx={{ mb: 1.5 }}>
+                      कोई व्यक्तिगत चैट नहीं मिली।
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon />}
+                      onClick={() => setNewDirectChatModal(true)}
+                    >
+                      नई चैट शुरू करें
+                    </Button>
+                  </Box>
+                ) : (
+                  filteredDirectChats.map((dc) => {
+                    const isSelected = dc.id === activeDirectChatId;
+                    const lastMsgList = directMessages[dc.id] || [];
+                    const lastMsg = lastMsgList[lastMsgList.length - 1];
+                    return (
+                      <ListItem key={dc.id} disablePadding>
+                        <ListItemButton
+                          selected={isSelected}
+                          onClick={() => setActiveDirectChatId(dc.id)}
+                          sx={{
+                            py: 1.4,
+                            px: 2,
+                            borderLeft: isSelected ? '4px solid #0284c7' : '4px solid transparent',
+                            bgcolor: isSelected ? 'rgba(2, 132, 199, 0.08) !important' : 'inherit',
+                            '&:hover': { bgcolor: '#f8fafc' },
+                          }}
+                        >
+                          <ListItemAvatar>
+                            <Badge
+                              overlap="circular"
+                              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                              variant="dot"
+                              sx={{
+                                '& .MuiBadge-badge': {
+                                  backgroundColor: dc.isOnline ? '#22c55e' : '#94a3b8',
+                                  boxShadow: '0 0 0 2px #fff',
+                                },
+                              }}
+                            >
+                              <Avatar sx={{ bgcolor: isSelected ? '#0284c7' : '#e2e8f0', color: isSelected ? '#fff' : '#1e293b', fontWeight: 800 }}>
+                                {dc.name ? dc.name[0] : 'U'}
+                              </Avatar>
+                            </Badge>
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                  {dc.name}
+                                </Typography>
+                                {lastMsg && (
+                                  <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.68rem' }}>
+                                    {lastMsg.time}
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
+                            secondary={
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.3 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: '#64748b',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '190px',
+                                    display: 'block',
+                                  }}
+                                >
+                                  {lastMsg ? (lastMsg.isMe ? `आप: ${lastMsg.text || 'फोटो/मीडिया'}` : lastMsg.text || 'फोटो/मीडिया') : `गोत्र: ${dc.gotra || 'केवट'} • ${dc.city || ''}`}
+                                </Typography>
+                                {dc.unreadCount > 0 && (
+                                  <Chip
+                                    label={dc.unreadCount}
+                                    size="small"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#0284c7', color: '#fff', fontWeight: 800 }}
+                                  />
+                                )}
+                              </Box>
+                            }
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })
+                )}
+              </>
+            )}
           </List>
+
+          {/* Quick Action Button at bottom of Left Column for 1-to-1 Chat */}
+          {chatMode === 'DIRECT' && (
+            <Box sx={{ p: 1.5, borderTop: '1px solid #f1f5f9' }}>
+              <Button
+                fullWidth
+                size="small"
+                variant="outlined"
+                startIcon={<PersonIcon />}
+                onClick={() => setNewDirectChatModal(true)}
+                sx={{
+                  color: '#0284c7',
+                  borderColor: '#bae6fd',
+                  fontWeight: 700,
+                  '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0284c7' },
+                }}
+              >
+                + नई व्यक्तिगत चैट जोड़ें
+              </Button>
+            </Box>
+          )}
         </Box>
 
         {/* RIGHT COLUMN: Active Chat Room Window */}
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc', height: { xs: '540px', md: '100%' } }}>
           {/* Chat Room Header */}
-          {activeGroup && (
-            <Box
-              sx={{
-                p: 2,
-                bgcolor: '#ffffff',
-                borderBottom: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Avatar sx={{ bgcolor: '#ea580c', fontWeight: 700 }}>
-                  {activeGroup.icon || '💬'}
-                </Avatar>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                    {activeGroup.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#64748b' }}>
-                    👥 {activeGroup.membersCount} सदस्य • {activeGroup.description}
-                  </Typography>
+          {chatMode === 'GROUPS' ? (
+            activeGroup && (
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: '#ffffff',
+                  borderBottom: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Avatar sx={{ bgcolor: '#ea580c', fontWeight: 700 }}>
+                    {activeGroup.icon || '💬'}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                      {activeGroup.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+                      👥 {activeGroup.membersCount} सदस्य • {activeGroup.description}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  {isCurrentUserAdmin ? (
+                    <Chip
+                      icon={<AdminIcon sx={{ fontSize: '15px !important', color: '#b45309 !important' }} />}
+                      label="🛡️ ग्रुप एडमिन"
+                      size="small"
+                      sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 800, border: '1px solid #fde68a' }}
+                    />
+                  ) : (
+                    <Chip
+                      label="👤 सदस्य"
+                      size="small"
+                      sx={{ bgcolor: '#f1f5f9', color: '#64748b', fontWeight: 600 }}
+                    />
+                  )}
+
+                  {/* VIEW GROUP MEMBERS & MULTIPLE ADMINS BUTTON */}
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<PeopleIcon />}
+                    onClick={() => {
+                      loadGroupMembers(targetGroupId);
+                      setGroupMembersModal(true);
+                    }}
+                    sx={{ fontWeight: 700, borderColor: '#cbd5e1', color: '#334155' }}
+                  >
+                    सदस्य व एडमिन ({activeGroup.membersCount || 2})
+                  </Button>
+
+                  {/* ADD MEMBER BUTTON IN CHAT HEADER (ADMIN ONLY) */}
+                  <Tooltip title={!isCurrentUserAdmin ? 'केवल ग्रुप एडमिन ही सदस्य जोड़ सकते हैं' : ''}>
+                    <span>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<AddMemberIcon />}
+                        disabled={!isCurrentUserAdmin}
+                        onClick={() => {
+                          if (!isLoggedIn) {
+                            openAuth('login');
+                            if (onNotification) onNotification('सदस्य जोड़ने के लिए कृपया पहले लॉगिन करें! 🔐');
+                            return;
+                          }
+                          if (!isCurrentUserAdmin) {
+                            if (onNotification) onNotification('केवल ग्रुप एडमिन ही इस समूह में नए सदस्य जोड़ सकते हैं! 🔐');
+                            return;
+                          }
+                          setAddMemberModal(true);
+                        }}
+                        sx={{
+                          fontWeight: 700,
+                          bgcolor: isCurrentUserAdmin ? '#ea580c' : '#cbd5e1',
+                          '&:hover': { bgcolor: isCurrentUserAdmin ? '#c2410c' : '#cbd5e1' },
+                        }}
+                      >
+                        + सदस्य जोड़ें (Add Member)
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Box>
               </Box>
+            )
+          ) : (
+            activeDirectChat && (
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: '#ffffff',
+                  borderBottom: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 1.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Badge
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    variant="dot"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        backgroundColor: activeDirectChat.isOnline ? '#22c55e' : '#94a3b8',
+                        boxShadow: '0 0 0 2px #fff',
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                      },
+                    }}
+                  >
+                    <Avatar sx={{ bgcolor: '#0284c7', color: '#fff', fontWeight: 800 }}>
+                      {activeDirectChat.name ? activeDirectChat.name[0] : 'U'}
+                    </Avatar>
+                  </Badge>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                        {activeDirectChat.name}
+                      </Typography>
+                      {activeDirectChat.gotra && (
+                        <Chip
+                          label={`गोत्र: ${activeDirectChat.gotra}`}
+                          size="small"
+                          sx={{ fontSize: '0.65rem', height: 18, bgcolor: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="caption" sx={{ color: activeDirectChat.isOnline ? '#16a34a' : '#64748b', fontWeight: 600 }}>
+                      {activeDirectChat.isOnline ? '🟢 अभी ऑनलाइन (Online)' : 'अंतिम सक्रियता हाल ही में'}
+                      {activeDirectChat.city ? ` • ${activeDirectChat.city}` : ''}
+                    </Typography>
+                  </Box>
+                </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                {isCurrentUserAdmin ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Chip
-                    icon={<AdminIcon sx={{ fontSize: '15px !important', color: '#b45309 !important' }} />}
-                    label="🛡️ ग्रुप एडमिन"
+                    icon={<ShieldIcon sx={{ fontSize: '14px !important', color: '#16a34a !important' }} />}
+                    label="🔒 एंड-टू-एंड सुरक्षित चैट"
                     size="small"
-                    sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 800, border: '1px solid #fde68a' }}
+                    sx={{ bgcolor: '#f0fdf4', color: '#16a34a', fontWeight: 700, border: '1px solid #bbf7d0' }}
                   />
-                ) : (
-                  <Chip
-                    label="👤 सदस्य"
-                    size="small"
-                    sx={{ bgcolor: '#f1f5f9', color: '#64748b', fontWeight: 600 }}
-                  />
-                )}
-
-                {/* VIEW GROUP MEMBERS & MULTIPLE ADMINS BUTTON */}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<PeopleIcon />}
-                  onClick={() => {
-                    loadGroupMembers(targetGroupId);
-                    setGroupMembersModal(true);
-                  }}
-                  sx={{ fontWeight: 700, borderColor: '#cbd5e1', color: '#334155' }}
-                >
-                  सदस्य व एडमिन ({activeGroup.membersCount || 2})
-                </Button>
-
-                {/* ADD MEMBER BUTTON IN CHAT HEADER (ADMIN ONLY) */}
-                <Tooltip title={!isCurrentUserAdmin ? 'केवल ग्रुप एडमिन ही सदस्य जोड़ सकते हैं' : ''}>
-                  <span>
+                  {activeDirectChat.phone && (
                     <Button
-                      variant="contained"
+                      variant="outlined"
                       size="small"
-                      startIcon={<AddMemberIcon />}
-                      disabled={!isCurrentUserAdmin}
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          openAuth('login');
-                          if (onNotification) onNotification('सदस्य जोड़ने के लिए कृपया पहले लॉगिन करें! 🔐');
-                          return;
-                        }
-                        if (!isCurrentUserAdmin) {
-                          if (onNotification) onNotification('केवल ग्रुप एडमिन ही इस समूह में नए सदस्य जोड़ सकते हैं! 🔐');
-                          return;
-                        }
-                        setAddMemberModal(true);
-                      }}
-                      sx={{
-                        fontWeight: 700,
-                        bgcolor: isCurrentUserAdmin ? '#ea580c' : '#cbd5e1',
-                        '&:hover': { bgcolor: isCurrentUserAdmin ? '#c2410c' : '#cbd5e1' },
-                      }}
+                      startIcon={<CallIcon />}
+                      component="a"
+                      href={`tel:${activeDirectChat.phone}`}
+                      sx={{ fontWeight: 700, borderColor: '#cbd5e1', color: '#0284c7' }}
                     >
-                      + सदस्य जोड़ें (Add Member)
+                      कॉल करें
                     </Button>
-                  </span>
-                </Tooltip>
+                  )}
+                </Box>
               </Box>
-            </Box>
+            )
           )}
 
           {/* Messages Scroll Area */}
@@ -1513,48 +1957,79 @@ export default function ChatView({ onNotification }) {
                       </Box>
                     </Box>
 
-                    {/* Admin Actions: Role change + Remove member from group */}
-                    {isCurrentUserAdmin && !isOwner && m.userId !== currentUser?.id && (
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        {isAdmin ? (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="inherit"
-                            onClick={() => handleUpdateMemberRole(m.userId, 'MEMBER')}
-                            sx={{ fontSize: '0.75rem', fontWeight: 600 }}
-                          >
-                            एडमिन हटाएं
-                          </Button>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="warning"
-                            startIcon={<ShieldIcon />}
-                            onClick={() => handleUpdateMemberRole(m.userId, 'ADMIN')}
-                            sx={{ fontSize: '0.75rem', fontWeight: 700, bgcolor: '#f59e0b', '&:hover': { bgcolor: '#d97706' } }}
-                          >
-                            🛡️ एडमिन बनाएं
-                          </Button>
-                        )}
-
+                    {/* Action buttons: Direct Chat + Admin controls */}
+                    {m.userId !== currentUser?.id && (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Direct 1-to-1 Chat Button */}
                         <Button
                           size="small"
                           variant="outlined"
-                          color="error"
-                          startIcon={<RemoveMemberIcon sx={{ fontSize: '15px !important' }} />}
-                          onClick={() => handleRemoveMember(m.userId, m.name)}
+                          startIcon={<ChatBubbleIcon sx={{ fontSize: '15px !important' }} />}
+                          onClick={() => {
+                            setGroupMembersModal(false);
+                            handleStartDirectChatWithMember({
+                              id: m.userId,
+                              name: m.name,
+                              gotra: m.gotra,
+                              city: m.city,
+                              phone: m.phone,
+                            });
+                          }}
                           sx={{
                             fontSize: '0.75rem',
                             fontWeight: 700,
-                            borderColor: '#fca5a5',
-                            color: '#dc2626',
-                            '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' },
+                            borderColor: '#bae6fd',
+                            color: '#0284c7',
+                            '&:hover': { bgcolor: '#f0f9ff', borderColor: '#0284c7' },
                           }}
                         >
-                          ग्रुप से हटाएं
+                          निजी चैट
                         </Button>
+
+                        {/* Admin Controls */}
+                        {isCurrentUserAdmin && !isOwner && (
+                          <>
+                            {isAdmin ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="inherit"
+                                onClick={() => handleUpdateMemberRole(m.userId, 'MEMBER')}
+                                sx={{ fontSize: '0.75rem', fontWeight: 600 }}
+                              >
+                                एडमिन हटाएं
+                              </Button>
+                            ) : (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="warning"
+                                startIcon={<ShieldIcon />}
+                                onClick={() => handleUpdateMemberRole(m.userId, 'ADMIN')}
+                                sx={{ fontSize: '0.75rem', fontWeight: 700, bgcolor: '#f59e0b', '&:hover': { bgcolor: '#d97706' } }}
+                              >
+                                🛡️ एडमिन बनाएं
+                              </Button>
+                            )}
+
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              startIcon={<RemoveMemberIcon sx={{ fontSize: '15px !important' }} />}
+                              onClick={() => handleRemoveMember(m.userId, m.name)}
+                              sx={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                borderColor: '#fca5a5',
+                                color: '#dc2626',
+                                '&:hover': { bgcolor: '#fef2f2', borderColor: '#ef4444' },
+                              }}
+                            >
+                              ग्रुप से हटाएं
+                            </Button>
+                          </>
+                        )}
                       </Box>
                     )}
                   </ListItem>
@@ -1633,6 +2108,106 @@ export default function ChatView({ onNotification }) {
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* NEW DIRECT 1-TO-1 CHAT MODAL DIALOG                            */}
+      {/* ============================================================== */}
+      <Dialog
+        open={newDirectChatModal}
+        onClose={() => setNewDirectChatModal(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonIcon sx={{ color: '#0284c7' }} />
+            <span>नई व्यक्तिगत 1-to-1 चैट (Direct Samaj Chat)</span>
+          </Box>
+          <IconButton onClick={() => setNewDirectChatModal(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+            समाज बंधुओं से सीधे व्यक्तिगत संवाद करें। यह बातचीत केवल आपके और संबंधित सदस्य के मध्य पूर्णतः निजी रहती है।
+          </Alert>
+
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="नाम, गोत्र या शहर से सदस्य खोजें..."
+            value={directMemberSearch}
+            onChange={(e) => setDirectMemberSearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+          />
+
+          <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, display: 'block', mb: 1 }}>
+            समाज डायरेक्टरी से सदस्य चुनें:
+          </Typography>
+
+          <List sx={{ maxHeight: 320, overflowY: 'auto', p: 0 }}>
+            {filteredDirectSearchMembers.map((mem) => {
+              const isSelf = mem.id === currentUser?.id || mem.mobileNumber === currentUser?.mobileNumber;
+              return (
+                <ListItem
+                  key={mem.id}
+                  secondaryAction={
+                    !isSelf ? (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<ChatBubbleIcon />}
+                        onClick={() => handleStartDirectChatWithMember(mem)}
+                        sx={{
+                          bgcolor: '#0284c7',
+                          '&:hover': { bgcolor: '#0369a1' },
+                          fontWeight: 700,
+                        }}
+                      >
+                        चैट करें
+                      </Button>
+                    ) : (
+                      <Chip label="आप (Self)" size="small" sx={{ bgcolor: '#f1f5f9', fontWeight: 700 }} />
+                    )
+                  }
+                  sx={{ borderBottom: '1px solid #f1f5f9', py: 1 }}
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#0284c7', fontWeight: 700 }}>{mem.name[0]}</Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          {mem.name}
+                        </Typography>
+                        <Chip
+                          label={`गोत्र: ${mem.gotra}`}
+                          size="small"
+                          sx={{ fontSize: '0.68rem', height: 18, bgcolor: '#e0f2fe', color: '#0369a1' }}
+                        />
+                      </Box>
+                    }
+                    secondary={`${mem.city}, ${mem.state} • ${mem.occupation}`}
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setNewDirectChatModal(false)} variant="outlined">
+            बंद करें
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

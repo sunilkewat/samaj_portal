@@ -10,7 +10,7 @@ import {
 import { Search as SearchIcon } from '@mui/icons-material';
 import MemberCard from '../components/directory/MemberCard';
 
-export default function DirectoryView({ members = [] }) {
+export default function DirectoryView({ members = [], onStartDirectChat }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [cityFilter, setCityFilter] = useState('ALL');
   const [bloodFilter, setBloodFilter] = useState('ALL');
@@ -84,7 +84,7 @@ export default function DirectoryView({ members = [] }) {
       <Grid container spacing={2}>
         {filteredMembers.map((member) => (
           <Grid item xs={12} sm={6} md={4} key={member.id}>
-            <MemberCard member={member} />
+            <MemberCard member={member} onStartChat={onStartDirectChat} />
           </Grid>
         ))}
       </Grid>

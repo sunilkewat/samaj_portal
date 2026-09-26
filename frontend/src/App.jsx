@@ -21,6 +21,7 @@ import {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(0);
+  const [directChatTarget, setDirectChatTarget] = useState(null);
   const [apiStatus, setApiStatus] = useState('checking');
   const [notification, setNotification] = useState(null);
 
@@ -125,9 +126,23 @@ export default function App() {
             />
           )}
 
-          {activeTab === 1 && <ChatView onNotification={setNotification} />}
+          {activeTab === 1 && (
+            <ChatView
+              onNotification={setNotification}
+              directChatTarget={directChatTarget}
+              onClearDirectChatTarget={() => setDirectChatTarget(null)}
+            />
+          )}
 
-          {activeTab === 2 && <DirectoryView members={INITIAL_MEMBERS} />}
+          {activeTab === 2 && (
+            <DirectoryView
+              members={INITIAL_MEMBERS}
+              onStartDirectChat={(member) => {
+                setDirectChatTarget(member);
+                setActiveTab(1);
+              }}
+            />
+          )}
 
           {activeTab === 3 && (
             <MatrimonialView

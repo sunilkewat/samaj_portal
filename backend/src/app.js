@@ -32,6 +32,9 @@ const authRoutes = require('./modules/auth/auth.routes');
 const profileRoutes = require('./modules/profiles/profile.routes');
 const directoryRoutes = require('./modules/directory/directory.routes');
 const postRoutes = require('./modules/posts/posts.routes');
+const matrimonialRoutes = require('./modules/matrimonial/matrimonial.routes');
+const memorialRoutes = require('./modules/memorials/memorials.routes');
+const bloodBankRoutes = require('./modules/blood-bank/bloodBank.routes');
 
 // API Routes Mounting Point
 const API_PREFIX = process.env.API_PREFIX || '/api/v1';
@@ -40,6 +43,9 @@ app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/profiles`, profileRoutes);
 app.use(`${API_PREFIX}/directory`, directoryRoutes);
 app.use(`${API_PREFIX}/posts`, postRoutes);
+app.use(`${API_PREFIX}/matrimonial`, matrimonialRoutes);
+app.use(`${API_PREFIX}/memorials`, memorialRoutes);
+app.use(`${API_PREFIX}/blood-bank`, bloodBankRoutes);
 
 app.get(`${API_PREFIX}`, (req, res) => {
   res.json({

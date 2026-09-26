@@ -13,7 +13,8 @@ class GroupsController {
 
   async getGroups(req, res, next) {
     try {
-      const groups = await groupsService.getGroups(req.user.id);
+      const userId = req.user ? req.user.id : null;
+      const groups = await groupsService.getGroups(userId);
       return res.status(200).json(new ApiResponse(200, groups, 'Groups retrieved'));
     } catch (error) {
       next(error);

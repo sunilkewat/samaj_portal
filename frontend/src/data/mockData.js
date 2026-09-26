@@ -76,3 +76,81 @@ export const INITIAL_EVENTS = [
     description: 'इस महाआयोजन में देश भर से स्वजातीय बंधु सादर आमंत्रित हैं। परिचय स्मारिका का विमोचन व सामूहिक स्नेह भोज।',
   },
 ];
+
+export const INITIAL_GROUPS = [
+  {
+    id: 'group-1',
+    name: '🌟 मुख्य समाज चौपाल (General Discussion)',
+    description: 'समस्त समाज बंधुओं की खुली चर्चा, सामान्य विचार विमर्श एवं सामाजिक सुझाव मंच।',
+    membersCount: 1420,
+    icon: '🏛️',
+    isMember: true,
+  },
+  {
+    id: 'group-2',
+    name: '💼 युवा प्रकोष्ठ व रोजगार मंच (Youth & Career)',
+    description: 'करियर मार्गदर्शन, सरकारी व प्राइवेट जॉब अलर्ट, स्किल ट्रेनिंग और स्टार्टअप चर्चा।',
+    membersCount: 680,
+    icon: '💼',
+    isMember: true,
+  },
+  {
+    id: 'group-3',
+    name: '🎓 शिक्षा व छात्रवृत्ति मंच (Education Wing)',
+    description: 'मेधावी छात्र-छात्राओं के लिए प्रतियोगी परीक्षाएं, छात्रवृत्ति व कोचिंग मार्गदर्शन।',
+    membersCount: 430,
+    icon: '📚',
+    isMember: false,
+  },
+  {
+    id: 'group-4',
+    name: '🩸 स्वास्थ्य व रक्तदान सेवा (Emergency Seva)',
+    description: 'इमरजेंसी रक्त आवश्यकता, चिकित्सा सहायता और सामाजिक स्वास्थ्य परामर्श।',
+    membersCount: 950,
+    icon: '🩸',
+    isMember: true,
+  },
+];
+
+export const INITIAL_MESSAGES = {
+  'group-1': [
+    {
+      id: 'm-1',
+      senderId: 'user-admin',
+      senderName: 'राजेश केवट (कार्यकारिणी सदस्य)',
+      senderGotra: 'भारद्वाज',
+      text: 'सादर जय समाज! आगामी 15 नवंबर के वार्षिक सम्मेलन की तैयारियां जोरों पर हैं।',
+      time: '10:30 AM',
+      isMe: false,
+    },
+    {
+      id: 'm-2',
+      senderId: 'user-2',
+      senderName: 'विकास केवट',
+      senderGotra: 'शांडिल्य',
+      text: 'जय समाज! क्या इस बार भी मेधावी छात्रों को छात्रवृत्ति प्रमाण पत्र दिए जाएंगे?',
+      time: '10:45 AM',
+      isMe: false,
+    },
+    {
+      id: 'm-3',
+      senderId: 'af0e2307-527b-4ff2-827b-3767f68fb979',
+      senderName: 'सुनील केवट (Sunil Kewat)',
+      senderGotra: 'कश्यप',
+      text: 'हाँ बिल्कुल, 85% से अधिक अंक पाने वाले सभी छात्र-छात्राओं का मंच पर विशेष सम्मान होगा।',
+      time: '11:02 AM',
+      isMe: true,
+    },
+  ],
+  'group-2': [
+    {
+      id: 'm-201',
+      senderId: 'user-young-1',
+      senderName: 'अमित केवट (सिविल इंजीनियर)',
+      senderGotra: 'वशिष्ठ',
+      text: 'इंदौर व भोपाल में सिविल और आईटी फ्रेशर्स के लिए कुछ नौकरियां खुली हैं, जरूरतमंद युवा संपर्क करें।',
+      time: 'कल 4:15 PM',
+      isMe: false,
+    },
+  ],
+};

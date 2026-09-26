@@ -43,7 +43,7 @@ class GroupsService {
           select: { members: true },
         },
         members: {
-          where: { userId },
+          where: { userId: userId || '00000000-0000-0000-0000-000000000000' },
           select: { role: true },
         },
       },

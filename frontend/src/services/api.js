@@ -55,3 +55,28 @@ export const registerUser = async (userData) => {
   const res = await apiClient.post('/auth/register', userData);
   return res.data;
 };
+
+export const fetchGroups = async () => {
+  const res = await apiClient.get('/groups');
+  return res.data;
+};
+
+export const createGroup = async (groupData) => {
+  const res = await apiClient.post('/groups', groupData);
+  return res.data;
+};
+
+export const joinGroup = async (groupId) => {
+  const res = await apiClient.post(`/groups/${groupId}/join`);
+  return res.data;
+};
+
+export const fetchGroupMessages = async (groupId, page = 1) => {
+  const res = await apiClient.get(`/groups/${groupId}/messages`, { params: { page } });
+  return res.data;
+};
+
+export const sendGroupMessage = async (groupId, payload) => {
+  const res = await apiClient.post(`/groups/${groupId}/messages`, payload);
+  return res.data;
+};

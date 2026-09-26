@@ -31,6 +31,7 @@ export default function HeroBanner({ activeTab, onTabChange }) {
             }}
           >
             <Tab label="📢 समाचार व फीड (Social Feed)" />
+            <Tab label="💬 समाज चौपाल व चैट (Chat)" />
             <Tab label="👥 सदस्य डायरेक्टरी (Directory)" />
             <Tab label="💍 वैवाहिक रिश्ते (Matrimonial)" />
             <Tab label="🩸 रक्तदान केंद्र (Blood SOS)" />

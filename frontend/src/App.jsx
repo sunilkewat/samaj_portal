@@ -6,6 +6,7 @@ import HeroBanner from './components/common/HeroBanner';
 import Footer from './components/common/Footer';
 import AuthDialog from './components/auth/AuthDialog';
 import FeedView from './views/FeedView';
+import ChatView from './views/ChatView';
 import DirectoryView from './views/DirectoryView';
 import MatrimonialView from './views/MatrimonialView';
 import BloodBankView from './views/BloodBankView';
@@ -124,18 +125,20 @@ export default function App() {
             />
           )}
 
-          {activeTab === 1 && <DirectoryView members={INITIAL_MEMBERS} />}
+          {activeTab === 1 && <ChatView onNotification={setNotification} />}
 
-          {activeTab === 2 && (
+          {activeTab === 2 && <DirectoryView members={INITIAL_MEMBERS} />}
+
+          {activeTab === 3 && (
             <MatrimonialView
               profiles={INITIAL_MATRIMONIAL}
               onNotification={setNotification}
             />
           )}
 
-          {activeTab === 3 && <BloodBankView donors={INITIAL_MEMBERS} />}
+          {activeTab === 4 && <BloodBankView donors={INITIAL_MEMBERS} />}
 
-          {activeTab === 4 && (
+          {activeTab === 5 && (
             <EventsView events={INITIAL_EVENTS} onNotification={setNotification} />
           )}
         </Container>

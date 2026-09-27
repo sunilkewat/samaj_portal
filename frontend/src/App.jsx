@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Box, Snackbar } from '@mui/material';
 import { AuthProvider } from './context/AuthContext';
-import { TenantProvider } from './context/TenantContext';
+import { TenantProvider, useTenant } from './context/TenantContext';
 import Navbar from './components/common/Navbar';
 import HeroBanner from './components/common/HeroBanner';
 import Footer from './components/common/Footer';
@@ -13,24 +13,26 @@ import MatrimonialView from './views/MatrimonialView';
 import BloodBankView from './views/BloodBankView';
 import EventsView from './views/EventsView';
 import { checkApiHealth, fetchFeed, togglePostLike } from './services/api';
-import {
-  INITIAL_MEMBERS,
-  INITIAL_MATRIMONIAL,
-  INITIAL_POSTS,
-  INITIAL_EVENTS,
-} from './data/mockData';
 
-export default function App() {
+function AppContent() {
+  const { tenant, tenantData, activeSlug } = useTenant();
   const [activeTab, setActiveTab] = useState(0);
   const [directChatTarget, setDirectChatTarget] = useState(null);
   const [apiStatus, setApiStatus] = useState('checking');
   const [notification, setNotification] = useState(null);
 
-  // Social Feed state
-  const [posts, setPosts] = useState(INITIAL_POSTS);
+  // Social Feed state - initialized and synchronized with active Samaj tenant data
+  const [posts, setPosts] = useState(tenantData.posts);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
 
-  // Load feed from API
+  // When active Samaj changes, instantly load that Samaj's posts and data
+  useEffect(() => {
+    if (tenantData && tenantData.posts) {
+      setPosts(tenantData.posts);
+    }
+  }, [activeSlug]);
+
+  // Load feed from API (if online)
   const loadPostsFromApi = async () => {
     setIsLoadingFeed(true);
     try {
@@ -41,7 +43,7 @@ export default function App() {
           author: p.author?.profile
             ? `${p.author.profile.firstName || ''} ${p.author.profile.lastName || ''}`.trim()
             : 'स्वजातीय सदस्य',
-          authorGotra: p.author?.profile?.samajGotra || 'केवट',
+          authorGotra: p.author?.profile?.samajGotra || tenant.gotras[0] || 'कश्यप',
           authorCity: p.author?.profile?.city || '',
           authorPhoto: p.author?.profile?.profilePhoto || null,
           role: p.isPinned ? 'विशेष सूचना' : 'सदस्य पोस्ट',
@@ -107,74 +109,92 @@ export default function App() {
   };
 
   return (
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc' }}>
+      {/* Modular Header */}
+      <Navbar apiStatus={apiStatus} />
+
+      {/* Hero & Navigation Tabs */}
+      <HeroBanner activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Dynamic Tab Views Scoped to Active Samaj */}
+      <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+        {activeTab === 0 && (
+          <FeedView
+            posts={posts}
+            isLoading={isLoadingFeed}
+            onToggleLike={handleToggleLike}
+            onPostCreated={handlePostCreated}
+            onNotification={setNotification}
+          />
+        )}
+
+        {activeTab === 1 && (
+          <ChatView
+            key={`chat-${activeSlug}`}
+            onNotification={setNotification}
+            directChatTarget={directChatTarget}
+            onClearDirectChatTarget={() => setDirectChatTarget(null)}
+          />
+        )}
+
+        {activeTab === 2 && (
+          <DirectoryView
+            key={`dir-${activeSlug}`}
+            members={tenantData.members || []}
+            onStartDirectChat={(member) => {
+              setDirectChatTarget(member);
+              setActiveTab(1);
+            }}
+          />
+        )}
+
+        {activeTab === 3 && (
+          <MatrimonialView
+            key={`matri-${activeSlug}`}
+            profiles={tenantData.matrimonial || []}
+            onNotification={setNotification}
+          />
+        )}
+
+        {activeTab === 4 && (
+          <BloodBankView
+            key={`blood-${activeSlug}`}
+            donors={tenantData.members || []}
+          />
+        )}
+
+        {activeTab === 5 && (
+          <EventsView
+            key={`events-${activeSlug}`}
+            events={tenantData.events || []}
+            onNotification={setNotification}
+          />
+        )}
+      </Container>
+
+      {/* Modular Footer */}
+      <Footer />
+
+      {/* Global Auth Modal */}
+      <AuthDialog onNotification={setNotification} />
+
+      {/* Notification Toast */}
+      <Snackbar
+        open={Boolean(notification)}
+        autoHideDuration={4000}
+        onClose={() => setNotification(null)}
+        message={notification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+    </Box>
+  );
+}
+
+export default function App() {
+  return (
     <TenantProvider>
       <AuthProvider>
-        <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc' }}>
-          {/* Modular Header */}
-          <Navbar apiStatus={apiStatus} />
-
-          {/* Hero & Navigation Tabs */}
-          <HeroBanner activeTab={activeTab} onTabChange={setActiveTab} />
-
-          {/* Dynamic Tab Views */}
-          <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
-            {activeTab === 0 && (
-              <FeedView
-                posts={posts}
-                isLoading={isLoadingFeed}
-                onToggleLike={handleToggleLike}
-                onPostCreated={handlePostCreated}
-                onNotification={setNotification}
-              />
-            )}
-
-            {activeTab === 1 && (
-              <ChatView
-                onNotification={setNotification}
-                directChatTarget={directChatTarget}
-                onClearDirectChatTarget={() => setDirectChatTarget(null)}
-              />
-            )}
-
-            {activeTab === 2 && (
-              <DirectoryView
-                members={INITIAL_MEMBERS}
-                onStartDirectChat={(member) => {
-                  setDirectChatTarget(member);
-                  setActiveTab(1);
-                }}
-              />
-            )}
-
-            {activeTab === 3 && (
-              <MatrimonialView
-                profiles={INITIAL_MATRIMONIAL}
-                onNotification={setNotification}
-              />
-            )}
-
-            {activeTab === 4 && <BloodBankView donors={INITIAL_MEMBERS} />}
-
-            {activeTab === 5 && (
-              <EventsView events={INITIAL_EVENTS} onNotification={setNotification} />
-            )}
-          </Container>
-
-          {/* Modular Footer */}
-          <Footer />
-
-          {/* Global Auth Modal */}
-          <AuthDialog onNotification={setNotification} />
-
-          {/* Notification Toast */}
-          <Snackbar
-            open={Boolean(notification)}
-            autoHideDuration={4000}
-            onClose={() => setNotification(null)}
-            message={notification}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          />
-        </Box>
+        <AppContent />
       </AuthProvider>
     </TenantProvider>
   );

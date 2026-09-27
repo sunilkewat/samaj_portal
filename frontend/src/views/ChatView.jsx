@@ -55,6 +55,7 @@ import {
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import { useTenant } from '../context/TenantContext';
 import {
   fetchGroups,
   fetchGroupMessages,
@@ -125,14 +126,15 @@ const isSingleEmojiOnly = (text) => {
 
 export default function ChatView({ onNotification, directChatTarget, onClearDirectChatTarget }) {
   const { currentUser, isLoggedIn, openAuth } = useAuth();
+  const { tenant, tenantData, activeSlug } = useTenant();
 
   // Mode: 'GROUPS' | 'DIRECT' (Like WhatsApp / Telegram)
   const [chatMode, setChatMode] = useState('GROUPS');
 
-  // Groups state
-  const [groups, setGroups] = useState(INITIAL_GROUPS);
-  const [activeGroupId, setActiveGroupId] = useState('group-1');
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  // Groups state scoped to active Samaj
+  const [groups, setGroups] = useState(() => (tenantData?.groups) || INITIAL_GROUPS);
+  const [activeGroupId, setActiveGroupId] = useState(() => (tenantData?.groups?.[0]?.id) || 'group-1');
+  const [messages, setMessages] = useState(() => (tenantData?.messages) || INITIAL_MESSAGES);
   const [messageInput, setMessageInput] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
 
@@ -148,13 +150,32 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
     }
   };
 
-  // 1-to-1 Direct Personal Chats state (WhatsApp/Telegram style)
-  const [directChats, setDirectChats] = useState(INITIAL_DIRECT_CHATS);
-  const [activeDirectChatId, setActiveDirectChatId] = useState('dm-sapna-batham');
-  const [directMessages, setDirectMessages] = useState(INITIAL_DIRECT_MESSAGES);
+  // 1-to-1 Direct Personal Chats state scoped to active Samaj
+  const [directChats, setDirectChats] = useState(() => (tenantData?.directChats) || INITIAL_DIRECT_CHATS);
+  const [activeDirectChatId, setActiveDirectChatId] = useState(() => (tenantData?.directChats?.[0]?.id) || 'dm-sapna-batham');
+  const [directMessages, setDirectMessages] = useState(() => (tenantData?.directMessages) || INITIAL_DIRECT_MESSAGES);
   const [directChatSearch, setDirectChatSearch] = useState('');
   const [newDirectChatModal, setNewDirectChatModal] = useState(false);
   const [directMemberSearch, setDirectMemberSearch] = useState('');
+
+  // Sync groups, messages, direct chats whenever active Samaj changes!
+  useEffect(() => {
+    if (tenantData) {
+      const gList = tenantData.groups || [];
+      setGroups(gList);
+      if (gList.length > 0) {
+        setActiveGroupId(gList[0].id);
+      }
+      setMessages(tenantData.messages || {});
+
+      const dList = tenantData.directChats || [];
+      setDirectChats(dList);
+      if (dList.length > 0) {
+        setActiveDirectChatId(dList[0].id);
+      }
+      setDirectMessages(tenantData.directMessages || {});
+    }
+  }, [activeSlug, tenantData]);
 
   // Media file attachment state in chat
   const [selectedChatMedia, setSelectedChatMedia] = useState(null);
@@ -765,7 +786,10 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
     activeGroup?.isAdmin ||
     activeGroup?.myRole === 'OWNER' ||
     activeGroup?.myRole === 'ADMIN' ||
-    currentUser?.mobileNumber === '9876543210' // Sunil Kewat
+    currentUser?.mobileNumber === '9876543210' || // Sunil Kewat (Kewat Admin)
+    currentUser?.mobileNumber === '9825011223' || // Hardik Patel (Patidar Admin)
+    currentUser?.mobileNumber === '9414011223' || // Vikram Singh (Rajput Admin)
+    currentUser?.mobileNumber === '9811011223'    // Akhilesh Yadav (Yadav Admin)
   );
 
   // Load group members whenever active group changes
@@ -801,14 +825,16 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
     (dc?.city || '').toLowerCase().includes((directChatSearch || '').toLowerCase())
   );
 
-  const filteredDirectoryMembers = (INITIAL_MEMBERS || []).filter(
+  const activeSamajMembers = tenantData?.members || INITIAL_MEMBERS || [];
+
+  const filteredDirectoryMembers = activeSamajMembers.filter(
     (m) =>
       (m?.name || '').toLowerCase().includes((memberSearch || '').toLowerCase()) ||
       (m?.gotra || '').includes(memberSearch || '') ||
       (m?.city || '').toLowerCase().includes((memberSearch || '').toLowerCase())
   );
 
-  const filteredDirectSearchMembers = (INITIAL_MEMBERS || []).filter(
+  const filteredDirectSearchMembers = activeSamajMembers.filter(
     (m) =>
       (m?.name || '').toLowerCase().includes((directMemberSearch || '').toLowerCase()) ||
       (m?.gotra || '').includes(directMemberSearch || '') ||

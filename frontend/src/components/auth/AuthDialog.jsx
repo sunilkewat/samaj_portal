@@ -17,7 +17,7 @@ import { useTenant } from '../../context/TenantContext';
 
 export default function AuthDialog({ onNotification }) {
   const { authModalOpen, closeAuth, authMode, setAuthMode, login, register, isAuthLoading } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, tenantData } = useTenant();
 
   const [mobileNumber, setMobileNumber] = useState('9876543210');
   const [password, setPassword] = useState('Admin@123456');
@@ -130,29 +130,29 @@ export default function AuthDialog({ onNotification }) {
           </Alert>
         )}
 
-        {/* Quick Demo Switcher */}
+        {/* Quick Demo Profiles Scoped to Active Samaj */}
         <Box sx={{ bgcolor: '#f8fafc', p: 1.5, borderRadius: 2, border: '1px solid #e2e8f0' }}>
           <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', display: 'block', mb: 1 }}>
-            ⚡ त्वरित टेस्टिंग प्रोफाइल चुनें (Quick Test Profiles):
+            ⚡ {tenant.shortName} • त्वरित लॉगिन प्रोफाइल:
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => handleQuickLogin('9876543210', 'Admin@123456', 'सुनील केवट')}
-              sx={{ fontSize: '0.75rem', py: 0.5 }}
-            >
-              👤 सुनील केवट (Admin)
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              color="secondary"
-              onClick={() => handleQuickLogin('9822211223', 'Admin@123456', 'सपना बाथम')}
-              sx={{ fontSize: '0.75rem', py: 0.5 }}
-            >
-              👤 सपना बाथम (Member)
-            </Button>
+            {(tenantData?.testUsers || []).map((u, idx) => (
+              <Button
+                key={u.mobile}
+                size="small"
+                variant="outlined"
+                onClick={() => handleQuickLogin(u.mobile, u.pass || 'Admin@123456', u.name.split(' (')[0])}
+                sx={{
+                  fontSize: '0.75rem',
+                  py: 0.5,
+                  fontWeight: 700,
+                  borderColor: idx === 0 ? tenant.primaryColor : '#cbd5e1',
+                  color: idx === 0 ? tenant.primaryColor : '#334155',
+                }}
+              >
+                👤 {u.name}
+              </Button>
+            ))}
           </Box>
         </Box>
       </DialogContent>

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { MULTI_TENANT_DATA } from '../data/mockData';
 
 // ============================================================================
 // SAMAJ / TENANTS REGISTRY (White-Label Multi-Tenant Catalog)
@@ -183,10 +184,13 @@ export const TenantProvider = ({ children }) => {
     document.title = `${tenant.name} | ${tenant.englishName}`;
   }, [tenant]);
 
+  const tenantData = MULTI_TENANT_DATA[activeSlug] || MULTI_TENANT_DATA.kewat;
+
   return (
     <TenantContext.Provider
       value={{
         tenant,
+        tenantData,
         activeSlug,
         switchTenant,
         allTenants: Object.values(SAMAJ_REGISTRY),

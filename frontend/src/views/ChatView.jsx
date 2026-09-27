@@ -24,6 +24,9 @@ import {
   Tooltip,
   Alert,
   Badge,
+  Popover,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Send as SendIcon,
@@ -48,6 +51,7 @@ import {
   Person as PersonIcon,
   Call as CallIcon,
   ChatBubble as ChatBubbleIcon,
+  InsertEmoticon as EmojiIcon,
 } from '@mui/icons-material';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -71,6 +75,54 @@ import {
   INITIAL_DIRECT_MESSAGES,
 } from '../data/mockData';
 
+// Organized WhatsApp / Telegram style Emoji categories for community chat
+const EMOJI_CATEGORIES = [
+  {
+    id: 'popular',
+    label: 'मुख्य (Popular)',
+    icon: '🌟',
+    emojis: ['🙏', '👍', '❤️', '😊', '😂', '🎉', '🚩', '💐', '🤝', '🔥', '🌸', '✨', '🎂', '👏', '😍', '🇮🇳'],
+  },
+  {
+    id: 'culture',
+    label: 'संस्कार व समाज',
+    icon: '🙏',
+    emojis: ['🙏', '🚩', '🕉️', '🪔', '💐', '🌸', '🌺', '🇮🇳', '🤝', '✨', '📿', '🧘', '🎊', '🌟', '🔔', '🔱', '🏵️', '🌻', '🌹', '🪷'],
+  },
+  {
+    id: 'smileys',
+    label: 'मुस्कान व भाव',
+    icon: '😊',
+    emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '🥹', '☺️', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😋', '😛', '😜', '🤪', '🤩', '😎', '🤗', '🤔', '🤫', '🫡', '🥳', '🥺', '😴', '😇'],
+  },
+  {
+    id: 'gestures',
+    label: 'इशारे व हाथ',
+    icon: '👍',
+    emojis: ['👍', '👎', '👏', '🙌', '🫶', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '✋', '🖐️', '👊', '✊', '🤛', '🤜', '🤝', '💪', '👌'],
+  },
+  {
+    id: 'celebrations',
+    label: 'उत्सव व प्यार',
+    icon: '❤️',
+    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🤍', '💖', '💝', '🎂', '🍰', '🧁', '🎈', '🎁', '🏆', '🥇', '🔥', '💥', '✨', '🌟', '⭐', '💫', '🎉', '🎊'],
+  },
+  {
+    id: 'family',
+    label: 'परिवार व दैनिक',
+    icon: '👨‍👩‍👦',
+    emojis: ['👨‍👩‍👧‍👦', '👨‍👩‍👦', '👨‍👩‍👧', '👴', '👵', '👨', '👩', '🧒', '👶', '☕', '🍵', '🚗', '🏍️', '📱', '💻', '📚', '🎓', '💼', '🏠', '🏛️', '💯'],
+  },
+];
+
+const QUICK_EMOJIS = ['🙏', '👍', '❤️', '😊', '😂', '🎉', '🚩', '💐', '🤝', '🔥'];
+
+const isSingleEmojiOnly = (text) => {
+  if (!text) return false;
+  const trimmed = text.trim();
+  return trimmed.length <= 10 && /^(\p{Extended_Pictographic}|\s)+$/u.test(trimmed);
+};
+
 export default function ChatView({ onNotification, directChatTarget, onClearDirectChatTarget }) {
   const { currentUser, isLoggedIn, openAuth } = useAuth();
 
@@ -83,6 +135,18 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [messageInput, setMessageInput] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
+
+  // Emoji picker state & input ref (WhatsApp / Telegram style)
+  const [emojiAnchorEl, setEmojiAnchorEl] = useState(null);
+  const [emojiCategoryTab, setEmojiCategoryTab] = useState(0);
+  const messageInputRef = useRef(null);
+
+  const handleAddEmoji = (emoji) => {
+    setMessageInput((prev) => (prev ? prev + emoji : emoji));
+    if (messageInputRef.current) {
+      messageInputRef.current.focus();
+    }
+  };
 
   // 1-to-1 Direct Personal Chats state (WhatsApp/Telegram style)
   const [directChats, setDirectChats] = useState(INITIAL_DIRECT_CHATS);
@@ -1551,7 +1615,16 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
 
                     {/* Text Message */}
                     {msg.text && (
-                      <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          lineHeight: isSingleEmojiOnly(msg.text) ? 1.2 : 1.5,
+                          fontSize: isSingleEmojiOnly(msg.text) ? '2.1rem' : 'inherit',
+                          wordBreak: 'break-word',
+                          whiteSpace: 'pre-wrap',
+                          py: isSingleEmojiOnly(msg.text) ? 0.5 : 0,
+                        }}
+                      >
                         {msg.text}
                       </Typography>
                     )}
@@ -1585,7 +1658,7 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
             )}
           </Box>
 
-          {/* Bottom Chat Input Form with Media Attachment */}
+          {/* Bottom Chat Input Form with Media Attachment & Emojis */}
           <Box sx={{ p: 2, bgcolor: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
             {/* Hidden File Input for Media Upload in Chat */}
             <input
@@ -1632,8 +1705,72 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
               </Box>
             )}
 
+            {/* Quick Community Emoji Bar (WhatsApp / Telegram style) */}
+            {isLoggedIn && (
+              <Box
+                sx={{
+                  mb: 1.2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.6,
+                  overflowX: 'auto',
+                  pb: 0.5,
+                  '&::-webkit-scrollbar': { height: 3 },
+                  '&::-webkit-scrollbar-thumb': { bgcolor: '#cbd5e1', borderRadius: 3 },
+                }}
+              >
+                <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 700, mr: 0.5, flexShrink: 0, fontSize: '0.72rem' }}>
+                  त्वरित इमोजी:
+                </Typography>
+                {QUICK_EMOJIS.map((emoji) => (
+                  <Box
+                    key={emoji}
+                    component="button"
+                    type="button"
+                    onClick={() => handleAddEmoji(emoji)}
+                    sx={{
+                      border: '1px solid #e2e8f0',
+                      bgcolor: '#f8fafc',
+                      borderRadius: '50%',
+                      width: 32,
+                      height: 32,
+                      minWidth: 32,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.15rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      '&:hover': {
+                        bgcolor: '#fed7aa',
+                        borderColor: '#ea580c',
+                        transform: 'scale(1.2)',
+                      },
+                    }}
+                  >
+                    {emoji}
+                  </Box>
+                ))}
+              </Box>
+            )}
+
             {isLoggedIn ? (
               <Box component="form" onSubmit={handleSendMessage} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                {/* Emoji Picker Button (WhatsApp & Telegram style) */}
+                <Tooltip title="इमोजी चुनें (Choose Emoji)">
+                  <IconButton
+                    type="button"
+                    onClick={(e) => setEmojiAnchorEl(e.currentTarget)}
+                    sx={{
+                      color: Boolean(emojiAnchorEl) ? '#ea580c' : '#f59e0b',
+                      bgcolor: Boolean(emojiAnchorEl) ? '#fff7ed' : 'transparent',
+                      '&:hover': { bgcolor: '#fef3c7' },
+                    }}
+                  >
+                    <EmojiIcon sx={{ fontSize: 24 }} />
+                  </IconButton>
+                </Tooltip>
+
                 {/* Media Attachment Action Buttons */}
                 <Tooltip title="फोटो या वीडियो संलग्न करें">
                   <IconButton
@@ -1673,7 +1810,8 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="अपना संदेश लिखें या YouTube लिंक पेस्ट करें..."
+                  inputRef={messageInputRef}
+                  placeholder="अपना संदेश या इमोजी लिखें, YouTube लिंक जोड़ें..."
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   sx={{ bgcolor: '#f8fafc', borderRadius: 2 }}
@@ -1694,6 +1832,102 @@ export default function ChatView({ onNotification, directChatTarget, onClearDire
                 >
                   भेजें
                 </Button>
+
+                {/* Popover Emoji Picker Drawer */}
+                <Popover
+                  open={Boolean(emojiAnchorEl)}
+                  anchorEl={emojiAnchorEl}
+                  onClose={() => setEmojiAnchorEl(null)}
+                  anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  PaperProps={{
+                    sx: {
+                      width: { xs: 300, sm: 360 },
+                      maxHeight: 380,
+                      p: 1.5,
+                      borderRadius: 3,
+                      boxShadow: '0 12px 36px rgba(15, 23, 42, 0.18)',
+                      border: '1px solid #e2e8f0',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    },
+                  }}
+                >
+                  {/* Category Tabs */}
+                  <Tabs
+                    value={emojiCategoryTab}
+                    onChange={(e, val) => setEmojiCategoryTab(val)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{
+                      minHeight: 38,
+                      borderBottom: '1px solid #e2e8f0',
+                      mb: 1,
+                      '& .MuiTab-root': {
+                        minHeight: 38,
+                        minWidth: 44,
+                        p: 0.5,
+                        fontSize: '1.2rem',
+                      },
+                    }}
+                  >
+                    {EMOJI_CATEGORIES.map((cat, idx) => (
+                      <Tab key={cat.id} label={cat.icon} title={cat.label} />
+                    ))}
+                  </Tabs>
+
+                  {/* Category Name Header */}
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#64748b', px: 1, mb: 0.8, display: 'block' }}>
+                    {EMOJI_CATEGORIES[emojiCategoryTab]?.label}
+                  </Typography>
+
+                  {/* Emoji Grid */}
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      gap: 0.8,
+                      overflowY: 'auto',
+                      p: 0.5,
+                      maxHeight: 240,
+                    }}
+                  >
+                    {EMOJI_CATEGORIES[emojiCategoryTab]?.emojis.map((emoji) => (
+                      <Box
+                        key={emoji}
+                        component="button"
+                        type="button"
+                        onClick={() => handleAddEmoji(emoji)}
+                        sx={{
+                          fontSize: '1.4rem',
+                          lineHeight: 1,
+                          border: 'none',
+                          bgcolor: 'transparent',
+                          cursor: 'pointer',
+                          p: 0.8,
+                          borderRadius: 1.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'transform 0.12s, background-color 0.15s',
+                          '&:hover': {
+                            bgcolor: '#f1f5f9',
+                            transform: 'scale(1.25)',
+                          },
+                        }}
+                      >
+                        {emoji}
+                      </Box>
+                    ))}
+                  </Box>
+                </Popover>
               </Box>
             ) : (
               <Box

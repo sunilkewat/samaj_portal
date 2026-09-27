@@ -10,16 +10,19 @@ import {
   Typography,
   Alert,
   CircularProgress,
+  MenuItem,
 } from '@mui/material';
 import { useAuth } from '../../context/AuthContext';
+import { useTenant } from '../../context/TenantContext';
 
 export default function AuthDialog({ onNotification }) {
   const { authModalOpen, closeAuth, authMode, setAuthMode, login, register, isAuthLoading } = useAuth();
+  const { tenant } = useTenant();
 
   const [mobileNumber, setMobileNumber] = useState('9876543210');
   const [password, setPassword] = useState('Admin@123456');
   const [fullName, setFullName] = useState('सुनील केवट');
-  const [gotra, setGotra] = useState('कश्यप');
+  const [gotra, setGotra] = useState(tenant?.gotras?.[0] || 'कश्यप');
   const [city, setCity] = useState('Indore');
   const [authError, setAuthError] = useState('');
 
@@ -71,7 +74,7 @@ export default function AuthDialog({ onNotification }) {
   return (
     <Dialog open={authModalOpen} onClose={closeAuth} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ fontWeight: 800 }}>
-        {authMode === 'login' ? 'समाज पोर्टल लॉगिन' : 'नया सदस्य पंजीकरण'}
+        {authMode === 'login' ? `🔐 ${tenant.shortName} लॉगिन` : `✨ ${tenant.shortName} • नया पंजीकरण`}
       </DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
         <TextField
@@ -94,17 +97,23 @@ export default function AuthDialog({ onNotification }) {
             <TextField
               fullWidth
               label="पूरा नाम (Full Name)"
-              placeholder="उदा. सुनील केवट"
+              placeholder={`उदा. सुनील ${tenant.shortName.replace(' समाज', '')}`}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
             <TextField
               fullWidth
-              label="गोत्र (Gotra)"
-              placeholder="उदा. कश्यप"
+              select
+              label="गोत्र (Gotra) - समाज अनुसार"
               value={gotra}
               onChange={(e) => setGotra(e.target.value)}
-            />
+            >
+              {(tenant?.gotras || ['कश्यप']).map((g) => (
+                <MenuItem key={g} value={g}>
+                  {g}
+                </MenuItem>
+              ))}
+            </TextField>
             <TextField
               fullWidth
               label="शहर (City)"

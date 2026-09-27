@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Box, Snackbar } from '@mui/material';
 import { AuthProvider } from './context/AuthContext';
+import { TenantProvider } from './context/TenantContext';
 import Navbar from './components/common/Navbar';
 import HeroBanner from './components/common/HeroBanner';
 import Footer from './components/common/Footer';
@@ -106,73 +107,75 @@ export default function App() {
   };
 
   return (
-    <AuthProvider>
-      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc' }}>
-        {/* Modular Header */}
-        <Navbar apiStatus={apiStatus} />
+    <TenantProvider>
+      <AuthProvider>
+        <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc' }}>
+          {/* Modular Header */}
+          <Navbar apiStatus={apiStatus} />
 
-        {/* Hero & Navigation Tabs */}
-        <HeroBanner activeTab={activeTab} onTabChange={setActiveTab} />
+          {/* Hero & Navigation Tabs */}
+          <HeroBanner activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* Dynamic Tab Views */}
-        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
-          {activeTab === 0 && (
-            <FeedView
-              posts={posts}
-              isLoading={isLoadingFeed}
-              onToggleLike={handleToggleLike}
-              onPostCreated={handlePostCreated}
-              onNotification={setNotification}
-            />
-          )}
+          {/* Dynamic Tab Views */}
+          <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+            {activeTab === 0 && (
+              <FeedView
+                posts={posts}
+                isLoading={isLoadingFeed}
+                onToggleLike={handleToggleLike}
+                onPostCreated={handlePostCreated}
+                onNotification={setNotification}
+              />
+            )}
 
-          {activeTab === 1 && (
-            <ChatView
-              onNotification={setNotification}
-              directChatTarget={directChatTarget}
-              onClearDirectChatTarget={() => setDirectChatTarget(null)}
-            />
-          )}
+            {activeTab === 1 && (
+              <ChatView
+                onNotification={setNotification}
+                directChatTarget={directChatTarget}
+                onClearDirectChatTarget={() => setDirectChatTarget(null)}
+              />
+            )}
 
-          {activeTab === 2 && (
-            <DirectoryView
-              members={INITIAL_MEMBERS}
-              onStartDirectChat={(member) => {
-                setDirectChatTarget(member);
-                setActiveTab(1);
-              }}
-            />
-          )}
+            {activeTab === 2 && (
+              <DirectoryView
+                members={INITIAL_MEMBERS}
+                onStartDirectChat={(member) => {
+                  setDirectChatTarget(member);
+                  setActiveTab(1);
+                }}
+              />
+            )}
 
-          {activeTab === 3 && (
-            <MatrimonialView
-              profiles={INITIAL_MATRIMONIAL}
-              onNotification={setNotification}
-            />
-          )}
+            {activeTab === 3 && (
+              <MatrimonialView
+                profiles={INITIAL_MATRIMONIAL}
+                onNotification={setNotification}
+              />
+            )}
 
-          {activeTab === 4 && <BloodBankView donors={INITIAL_MEMBERS} />}
+            {activeTab === 4 && <BloodBankView donors={INITIAL_MEMBERS} />}
 
-          {activeTab === 5 && (
-            <EventsView events={INITIAL_EVENTS} onNotification={setNotification} />
-          )}
-        </Container>
+            {activeTab === 5 && (
+              <EventsView events={INITIAL_EVENTS} onNotification={setNotification} />
+            )}
+          </Container>
 
-        {/* Modular Footer */}
-        <Footer />
+          {/* Modular Footer */}
+          <Footer />
 
-        {/* Global Auth Modal */}
-        <AuthDialog onNotification={setNotification} />
+          {/* Global Auth Modal */}
+          <AuthDialog onNotification={setNotification} />
 
-        {/* Notification Toast */}
-        <Snackbar
-          open={Boolean(notification)}
-          autoHideDuration={4000}
-          onClose={() => setNotification(null)}
-          message={notification}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        />
-      </Box>
-    </AuthProvider>
+          {/* Notification Toast */}
+          <Snackbar
+            open={Boolean(notification)}
+            autoHideDuration={4000}
+            onClose={() => setNotification(null)}
+            message={notification}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          />
+        </Box>
+      </AuthProvider>
+    </TenantProvider>
   );
 }

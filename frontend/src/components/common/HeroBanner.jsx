@@ -1,19 +1,32 @@
 import React from 'react';
 import { Box, Container, Typography, Chip, Tabs, Tab } from '@mui/material';
+import { useTenant } from '../../context/TenantContext';
 
 export default function HeroBanner({ activeTab, onTabChange }) {
+  const { tenant } = useTenant();
+
   return (
     <Box sx={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: '#fff', py: 3.5, px: 2 }}>
       <Container maxWidth="lg" sx={{ textAlign: 'center' }}>
-        <Chip label="अखिल भारतीय समाज कल्याण मंच" color="warning" size="small" sx={{ mb: 1.5, fontWeight: 700 }} />
+        <Chip
+          label={`आराध्य: ${tenant.ishtadev} • ${tenant.headquarters || 'अखिल भारतीय'}`}
+          size="small"
+          sx={{
+            mb: 1.5,
+            fontWeight: 800,
+            bgcolor: 'rgba(255, 255, 255, 0.12)',
+            color: '#fdba74',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+          }}
+        />
         <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, fontSize: { xs: '1.7rem', md: '2.4rem' } }}>
-          समस्त स्वजातीय बंधुओं का डिजिटल मंच
+          {tenant.name}
         </Typography>
         <Typography
           variant="body1"
           sx={{ color: '#cbd5e1', maxWidth: 700, mx: 'auto', mb: 2.5, fontSize: { xs: '0.9rem', md: '1rem' } }}
         >
-          पारिवारिक डायरेक्टरी, विवाह संबंध (Rishtey), रक्तदान सहायता, सामाजिक आयोजन व समाज समाचार की एकीकृत सुविधा।
+          {tenant.tagline} • पारिवारिक डायरेक्टरी, वैवाहिक प्रकोष्ठ, रक्तदान सहायता एवं समाज चौपाल।
         </Typography>
 
         {/* Navigation Tabs */}
@@ -27,7 +40,8 @@ export default function HeroBanner({ activeTab, onTabChange }) {
             scrollButtons="auto"
             sx={{
               '& .MuiTab-root': { color: '#cbd5e1', fontWeight: 600, minHeight: 44, borderRadius: 2 },
-              '& .Mui-selected': { color: '#ffffff !important', bgcolor: 'rgba(234, 88, 12, 0.3)' },
+              '& .Mui-selected': { color: '#ffffff !important', bgcolor: `${tenant.primaryColor}55` },
+              '& .MuiTabs-indicator': { bgcolor: tenant.primaryColor },
             }}
           >
             <Tab label="📢 समाचार व फीड (Social Feed)" />

@@ -15,29 +15,37 @@ import {
   Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
+import { useTenant } from '../../context/TenantContext';
+import SamajSwitcher from './SamajSwitcher';
 
 export default function Navbar({ apiStatus }) {
   const { currentUser, openAuth, logout } = useAuth();
+  const { tenant } = useTenant();
 
   return (
-    <AppBar position="sticky" sx={{ bgcolor: '#0f172a', borderBottom: '2px solid #ea580c' }}>
+    <AppBar position="sticky" sx={{ bgcolor: '#0f172a', borderBottom: `3px solid ${tenant.primaryColor}` }}>
       <Container maxWidth="xl">
         <Toolbar disableGutters sx={{ justifyContent: 'space-between', py: 0.5 }}>
           {/* Logo & Title */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Typography variant="h4" component="span" sx={{ fontSize: '2rem' }}>🏛️</Typography>
+            <Typography variant="h4" component="span" sx={{ fontSize: '2rem' }}>
+              {tenant.ishtadevIcon}
+            </Typography>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#f8fafc', lineHeight: 1.1 }}>
-                समाज पोर्टल
+                {tenant.shortName}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#fdba74', fontWeight: 500, letterSpacing: 1 }}>
-                SAMAJ PORTAL • एकता ही शक्ति है
+              <Typography variant="caption" sx={{ color: '#fdba74', fontWeight: 500, letterSpacing: 0.5 }}>
+                {tenant.englishName} • {tenant.tagline}
               </Typography>
             </Box>
           </Box>
 
           {/* Right Action Buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {/* Multi-Tenant Samaj Switcher (Demo / White-label Selector) */}
+            <SamajSwitcher />
+
             <Chip
               label={apiStatus === 'online' ? 'Cloud API Live 🟢' : 'Connecting API...'}
               size="small"
@@ -46,7 +54,7 @@ export default function Navbar({ apiStatus }) {
                 color: apiStatus === 'online' ? '#4ade80' : '#fdba74',
                 fontWeight: 600,
                 border: '1px solid rgba(255,255,255,0.1)',
-                display: { xs: 'none', sm: 'inline-flex' },
+                display: { xs: 'none', md: 'inline-flex' },
               }}
             />
 
